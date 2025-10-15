@@ -1,0 +1,10 @@
+/* ページの余白をなくし、背景色を設定 */
+body {
+    margin: 0;
+    overflow: hidden; /* スクロールバーを消す */
+    background-color: #f0f0f0;
+}
+/* canvasをブロック要素として表示 */
+canvas {
+    display: block;
+}
