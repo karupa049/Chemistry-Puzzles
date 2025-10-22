@@ -1,0 +1,13 @@
+html, body {
+    margin: 0;       /* 余白を削除 */
+    padding: 0;      /* パディングを削除 */
+    overflow: hidden;  /* スクロールバーを非表示にする */
+    background-color: #f0f0f0;
+}
+
+/* mainタグへのスタイル指定は不要になります。
+  キャンバスが自動的に全画面に配置されるため。
+*/
+canvas {
+    display: block;  /* キャンバスの下にできる余白を削除 */
+}
