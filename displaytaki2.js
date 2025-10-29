@@ -8,6 +8,9 @@ let periodicTableElements = []; // 周期表の元素（ドラッグ元）
 let placedGameElements = []; // ゲーム画面に配置された元素（タワー）
 let draggingElement = null; // 現在ドラッグ中の元素データ
 
+// ★ 統合 ★ (teppeiEnemy.js の enemyindex の代わり)
+let enemies = []; // 敵を管理する配列
+
 // メニューボタンの定数
 const MENU_BUTTON_X = 20;
 const MENU_BUTTON_Y = 20;
@@ -28,7 +31,7 @@ function setup() {
 
 /**
  * 周期表のデータ
- * 18族までの(行, 列)で定義
+ * (中略: elementData, activeElements は変更なし)
  */
 const elementData = [
     // Period 1 (第1周期)
@@ -100,8 +103,7 @@ function draw() {
     if (gameState === 'start') {
         drawStartScreen();
     } else if (gameState === 'stage') {
-        // ★修正点1: ステージ画面での背景クリアを追加
-        // これにより、前フレームの描画（スタート画面の残像、ドラッグ中の要素の残像）を消去します。
+        // ステージ画面での背景クリア
         background(100, 150, 100); 
 
         drawAreas(); // 周期表エリアの背景と境界線を描画
@@ -114,6 +116,11 @@ function draw() {
         // 3. ゲームエリアに配置された元素を描画
         for (let el of placedGameElements) {
             el.draw();
+        }
+
+        // ★ 統合 ★ 敵を描画 (タワーの上、ドラッグ要素の下)
+        for (let e of enemies) {
+            e.draw();
         }
         
         // 4. ドラッグ中の元素を描画 (マウスに追従)
@@ -197,18 +204,20 @@ function mousePressed() {
             }
         }
         
-        // C. メニューが閉じていれば、通常のゲーム操作処理をここに記述
-    }
-    for (let el of periodicTableElements) {
-        // isMouseOver() が (isActiveな要素のみtrueを返すように変更したため)
-        if (el.isMouseOver()) {
-            draggingElement = {
-                name: el.name,
-                color: el.color,
-                // 配置後のサイズ (少し大きくする)
-                size: el.size + 10 
-            };
-            break; 
+        // C. メニューが閉じていれば、通常のゲーム操作処理
+        
+        // 周期表要素のドラッグ開始判定
+        for (let el of periodicTableElements) {
+            // isMouseOver() が (isActiveな要素のみtrueを返すように変更したため)
+            if (el.isMouseOver()) {
+                draggingElement = {
+                    name: el.name,
+                    color: el.color,
+                    // 配置後のサイズ (少し大きくする)
+                    size: el.size + 10 
+                };
+                break; 
+            }
         }
     }
 }
@@ -249,15 +258,30 @@ function drawStartScreen() {
 }
 
 // --- 4-2. ステージ画面の描画 ---
-// draw() 関数で background(100, 150, 100); を実行したため、ここではコメントアウトのまま
-// function drawStageScreen() {
-//   background(100, 150, 100); // フィールドの背景
-//   fill(150, 100, 50); 
-//   rect(100, 100, 600, 50); // 通路の例
-// }
+// (draw()関数内で背景描画を行うため不要)
 
 // --- 4-3. ゲームロジックの更新 ---
 function updateGameLogic() {
+    
+    // ★ 統合 ★ (teppeiEnemy.js のロジック)
+    
+    // 1. 敵の生成 (60フレームに1回)
+    if (frameCount % 60 == 0) {
+        // (100, 100) からスタート。
+        // (100, 100) がゲームエリア内 (x < gameAreaWidth) であることを確認
+        if (100 < gameAreaWidth) { 
+             enemies.push(new Enemy(100, 100));
+        }
+    }
+    
+    // 2. 敵の移動 (更新)
+    for (let e of enemies) {
+        // move1 にゲームエリアの境界 (幅と高さ) を渡す
+        e.move1(gameAreaWidth, height); 
+    }
+    // ★ 統合ここまで ★
+
+
     // 敵の移動、タワーの攻撃、ゲームオーバー判定などのロジックをここに追加
 }
 
@@ -266,6 +290,10 @@ function initializeStage() {
     // ステージごとの敵の配置や資金のリセットなど
     console.log("ステージ初期化完了");
     menuOpen = false;
+    
+    // ★ 統合 ★ ステージ開始時に敵とタワーをリセット
+    enemies = [];
+    placedGameElements = [];
 }
 
 // ===================================
@@ -339,6 +367,10 @@ function drawBackButton(centerX, centerY) {
     textAlign(CENTER, CENTER);
     text('スタート画面に戻る', centerX, centerY);
 }
+
+// ===================================
+// 6. クラス定義
+// ===================================
 
 class PeriodicElement {
     // 5番目の引数として isActive を受け取る
@@ -427,4 +459,60 @@ class PlacedElement {
         textSize(this.size * 0.6);
         text(this.name, this.x, this.y);
     }
+}
+
+
+// ★ 統合 ★ (teppeiEnemy.js の Enemy クラス)
+class Enemy{
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.size = 30; // 敵のサイズ
+  }
+  
+  // 描画メソッド (teppeiEnemy.js の draw() 内の描画処理を移植)
+  draw() {
+    fill(255, 0, 0); // 敵は赤色
+    stroke(0);
+    strokeWeight(1);
+    ellipse(this.x, this.y, this.size, this.size);
+  }
+
+  // 移動メソッド (元の move1 を displaytaki2.js の環境に適応)
+  move1(gameAreaWidth, gameAreaHeight){
+    
+    // 元のロジック:
+    // if(this.x<=500){
+    //   if(this.y==300){
+    //     this.x = this.x - 2;
+    //   }
+    //   this.x = this.x + 1;
+    // }else if(this.y<=300){
+    //   this.y = this.y + 2;
+    // }
+
+    // 1. 右の折り返し地点 (ゲームエリアの右端より50px手前)
+    let turningPointX = gameAreaWidth - 50; 
+    
+    // 2. 下の折り返し地点 (元の 300 の代わり。画面中央)
+    let turningPointY = gameAreaHeight / 2; 
+
+    
+    // displaytaki2.js に適応させたロジック:
+    if(this.x <= turningPointX){ // 1. 右の折り返し地点に達するまで
+      
+      // 元のコードにあった「もしyが特定位置なら左に戻る」ロジック
+      // (タワーディフェンスの経路としては不自然ですが、元の動作を再現)
+      // abs() は絶対値。this.y が turningPointY に非常に近い場合
+      if(abs(this.y - turningPointY) < 2){ 
+        this.x = this.x - 2; // 左に戻る
+      }
+      
+      this.x = this.x + 1; // 基本は右に進む
+      
+    } else if (this.y <= turningPointY){ // 2. 右端に達した後、下の折り返し地点に達するまで
+      this.y = this.y + 2; // 下に進む
+    }
+    // 3. (turningPointX, turningPointY) に達すると停止する (元のロジック)
+  }
 }
