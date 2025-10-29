@@ -1,7 +1,7 @@
 // setup関数は最初に一度だけ実行される
 function setup() {
   // 600x400ピクセルのキャンバスを作成
-  createCanvas(600, 400);
+  createCanvas(windowWidth, windowHeight);
   frameRate(60);
 }
 
@@ -13,7 +13,7 @@ function draw() {
   background(220);
   // マウスの位置に円を描画]
   if(frameCount%60==0){
-    enemyindex.push(new Enemy(100, 100));
+    enemyindex.push(new Enemy(100, 100));//敵を作成し続ける
   }
   for (let e of enemyindex) {
     // enemy は配列aから取り出されたEnemyオブジェクト
@@ -35,7 +35,7 @@ class Enemy{
       }
       this.x = this.x + 1;
     }else if(this.y<=300){
-      this.y = this.y + 1;
+      this.y = this.y + 2;
     }
   }
 }
