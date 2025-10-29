@@ -432,10 +432,10 @@ class PlacedElement {
     // 描画 (こちらは円形にする)
     draw() {
         // ★変更★ 
-        // 1. 結合範囲の円を描画 (緑)
+        // 1. 結合範囲の円を描画 (黒)
         if (!this.reacted) { // 反応前の元素のみ
             noFill();
-            stroke(0, 200, 0, 80); // 半透明の緑
+            stroke(0, 0, 0, 80); // 半透明の黒
             strokeWeight(1);
             ellipse(this.x, this.y, REACTION_DISTANCE * 2, REACTION_DISTANCE * 2);
             
