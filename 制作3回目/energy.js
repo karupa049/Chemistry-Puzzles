@@ -123,6 +123,9 @@ function draw() {
         drawAreas();
         for (let el of periodicTableElements) { el.draw(); }
         
+        // ★★★ ホバーした元素のコストを表示 (新規追加) ★★★
+        drawCostTooltip();
+
         // --- ゲームエリア内の描画 ---
         if (mainTower) { mainTower.draw(); }
         
@@ -1041,6 +1044,48 @@ function windowResized() {
     
     // 周期表のボタン位置を再計算・再配置する
     setupPeriodicTable();
+}
+
+function drawCostTooltip() {
+    // 1. 周期表の要素の上にあるかチェック
+    // (isMouseOver() と isActive() を両方チェックする)
+    let hoveredEl = periodicTableElements.find(el => el.isMouseOver() && el.isActive);
+
+    if (hoveredEl) {
+        // 2. コストを取得
+        let cost = elementCosts[hoveredEl.name];
+
+        // 3. コストが定義されている(undefinedではない)場合のみ描画
+        if (cost !== undefined) {
+            
+            let tooltipW = 60;
+            let tooltipH = 30;
+            // マウスカーソルの少し右下に表示
+            let x = mouseX + 15; 
+            let y = mouseY + 15;
+
+            // 画面の右端/下端からはみ出ないように調整
+            if (x + tooltipW > width) {
+                x = mouseX - tooltipW - 15; // 右にはみ出るなら左側に表示
+            }
+            if (y + tooltipH > height) {
+                y = mouseY - tooltipH - 15; // 下にはみ出るなら上側に表示
+            }
+
+            // 4. ツールチップの背景
+            fill(0, 0, 0, 200); // 半透明の黒
+            noStroke();
+            rectMode(CORNER);
+            rect(x, y, tooltipW, tooltipH, 5); // 角丸
+
+            // 5. テキスト
+            fill(255); // 白文字
+            textSize(14);
+            textAlign(LEFT, CENTER);
+            // "Cost: 10" のように表示
+            text(`Cost: ${cost}`, x + 8, y + tooltipH / 2);
+        }
+    }
 }
 
 // ===================================
