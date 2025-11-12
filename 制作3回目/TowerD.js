@@ -313,7 +313,7 @@ function updateGameLogic() {
             continue;
         }
 
-        if (bullet.x < 0 || bullet.x > width || bullet.y < 0 || bullet.y > height) {
+        if (bullet.x < 0 || bullet.x > gameAreaWidth || bullet.y < 0 || bullet.y > height) {
             bullets.splice(i, 1);
         }
     }
