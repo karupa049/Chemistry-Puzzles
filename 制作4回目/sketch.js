@@ -1,42 +1,46 @@
 // ===================================
 // 1. 状態管理変数
 // ===================================
-let gameState = 'start'; // ゲームの状態: 'start', 'stage', 'gameover'
+let gameState = 'start'; // ゲームの状態: 'start', 'stage', 'gameover', 'editor'
 let menuOpen = false;    // メニューの開閉状態
-let gameAreaWidth; // ゲームエリアの幅（X座標の境界線）
+let gameAreaWidth;       // ゲームエリアの幅（X座標の境界線）
 
 // --- 周期表・タワー関連 ---
 let periodicTableElements = []; // 周期表の元素（ドラッグ元）
-let placedGameElements = []; // ゲーム画面に配置された元素（防衛ユニット, H2O含む）
-let draggingElement = null; // 現在ドラッグ中の元素データ
-let combinationHints = []; // 合成ヒントの描画用配列
+let placedGameElements = [];    // ゲーム画面に配置された元素（防衛ユニット, H2O含む）
+let draggingElement = null;     // 現在ドラッグ中の元素データ
+let combinationHints = [];      // 合成ヒントの描画用配列
 
 // --- 敵・基地・弾丸関連 ---
-let enemies = []; // 敵を管理する配列
-let mainTower; // メインタワー（基地）
-let bullets = []; // 弾丸を管理する配列
-
-// ★ 追加 ★ 敵の生成タイミングを時間で管理
-let lastSpawnTime = 0; // 最後に敵を生成した時間
+let enemies = [];    // 敵を管理する配列
+let mainTower;       // メインタワー（基地）
+let bullets = [];    // 弾丸を管理する配列
+let lastSpawnTime = 0;       // 最後に敵を生成した時間
 const SPAWN_INTERVAL = 1000; // 敵を生成する間隔 (ms)
 
-// ★★★ エネルギー（コスト）関連の変数を追加 ★★★
-let currentEnergy = 100; // 現在のエネルギー
-let maxEnergy = 1000;     // 最大エネルギー
-let energyRegenPerSecond = 1; // ★毎秒のエネルギー回復量 (deltaTime対応)
-let enemyKillReward = 5;  // 敵を倒したときの報酬
+// --- ★エネルギー（コスト）関連 ---
+let currentEnergy = 100;      // 現在のエネルギー
+let maxEnergy = 1000;         // 最大エネルギー
+let energyRegenPerSecond = 5; // 毎秒のエネルギー回復量
+let enemyKillReward = 15;     // 敵を倒したときの報酬
 
-// ★★★ 元素ごとのコストを定義 ★★★
+// --- ★元素ごとのコスト定義 ---
 const elementCosts = {
     'H': 10,
     'O': 25,
     'C': 20,
     'N': 20
-    // (H2Oは合成によって生成されるため、コストは不要)
+    // (H2Oは合成によって生成されるため、配置コストは不要)
 };
 
+// --- ★ステージエディター関連 ---
+let editorState = 'path'; // エディターのサブ状態: 'path', 'obstacle', 'placement'
+let obstacles = [];       // 障害物の配列
+let pathNodes = [];       // 敵の進行経路ノード
+let placementAreas = [];  // 味方ユニット設置可能エリア（今回は簡易的に全面設置可としつつ、データ構造は維持）
+let draggingNode = null;  // ドラッグ中の経路ノード
+
 // メニューボタンの定数
-// const MENU_BUTTON_X = 1635; // ★ 削除 ★ (width相対座標に変更するため)
 const MENU_BUTTON_Y = 8;
 const MENU_BUTTON_SIZE = 40;
 
@@ -45,41 +49,41 @@ const REACTION_DISTANCE = 80; // HとOが反応する最大距離
 
 // 色の定義
 const colors = {
-    'H': '#FFFFFF', // 水素 (白)
-    'O': '#FF4136', // 酸素 (赤)
-    'C': '#555555', // 炭素 (黒)
-    'N': '#3388FF', // 窒素 (青)
+    'H': '#FFFFFF',  // 水素 (白)
+    'O': '#FF4136',  // 酸素 (赤)
+    'C': '#555555',  // 炭素 (黒)
+    'N': '#3388FF',  // 窒素 (青)
     'H2O': '#ADD8E6' // 水 (ライトブルー)
 };
 
 function setup() {
-    createCanvas(windowWidth, windowHeight); 
-    gameAreaWidth = width / 2; 
+    createCanvas(windowWidth, windowHeight);
+    gameAreaWidth = width / 2;
     setupPeriodicTable();
 }
 
 /**
- * 周期表のデータ (中略)
+ * 周期表のデータ
  */
 const elementData = [
-    // Period 1 (第1周期)
+    // Period 1
     { symbol: 'H', row: 1, col: 1 },  { symbol: 'He', row: 1, col: 18 },
-    // Period 2 (第2周期)
+    // Period 2
     { symbol: 'Li', row: 2, col: 1 }, { symbol: 'Be', row: 2, col: 2 },
     { symbol: 'B', row: 2, col: 13 }, { symbol: 'C', row: 2, col: 14 }, { symbol: 'N', row: 2, col: 15 }, { symbol: 'O', row: 2, col: 16 }, { symbol: 'F', row: 2, col: 17 }, { symbol: 'Ne', row: 2, col: 18 },
-    // Period 3 (第3周期)
+    // Period 3
     { symbol: 'Na', row: 3, col: 1 }, { symbol: 'Mg', row: 3, col: 2 },
     { symbol: 'Al', row: 3, col: 13 }, { symbol: 'Si', row: 3, col: 14 }, { symbol: 'P', row: 3, col: 15 }, { symbol: 'S', row: 3, col: 16 }, { symbol: 'Cl', row: 3, col: 17 }, { symbol: 'Ar', row: 3, col: 18 },
-    // Period 4 (第4周期)
+    // Period 4
     { symbol: 'K', row: 4, col: 1 }, { symbol: 'Ca', row: 4, col: 2 }, { symbol: 'Sc', row: 4, col: 3 }, { symbol: 'Ti', row: 4, col: 4 }, { symbol: 'V', row: 4, col: 5 }, { symbol: 'Cr', row: 4, col: 6 }, { symbol: 'Mn', row: 4, col: 7 }, { symbol: 'Fe', row: 4, col: 8 }, { symbol: 'Co', row: 4, col: 9 }, { symbol: 'Ni', row: 4, col: 10 }, { symbol: 'Cu', row: 4, col: 11 }, { symbol: 'Zn', row: 4, col: 12 },
     { symbol: 'Ga', row: 4, col: 13 }, { symbol: 'Ge', row: 4, col: 14 }, { symbol: 'As', row: 4, col: 15 }, { symbol: 'Se', row: 4, col: 16 }, { symbol: 'Br', row: 4, col: 17 }, { symbol: 'Kr', row: 4, col: 18 },
-    // Period 5 (第5周期)
+    // Period 5
     { symbol: 'Rb', row: 5, col: 1 }, { symbol: 'Sr', row: 5, col: 2 }, { symbol: 'Y', row: 5, col: 3 }, { symbol: 'Zr', row: 5, col: 4 }, { symbol: 'Nb', row: 5, col: 5 }, { symbol: 'Mo', row: 5, col: 6 }, { symbol: 'Tc', row: 5, col: 7 }, { symbol: 'Ru', row: 5, col: 8 }, { symbol: 'Rh', row: 5, col: 9 }, { symbol: 'Pd', row: 5, col: 10 }, { symbol: 'Ag', row: 5, col: 11 }, { symbol: 'Cd', row: 5, col: 12 },
     { symbol: 'In', row: 5, col: 13 }, { symbol: 'Sn', row: 5, col: 14 }, { symbol: 'Sb', row: 5, col: 15 }, { symbol: 'Te', row: 5, col: 16 }, { symbol: 'I', row: 5, col: 17 }, { symbol: 'Xe', row: 5, col: 18 },
-    // Period 6 (第6周期)
+    // Period 6
     { symbol: 'Cs', row: 6, col: 1 }, { symbol: 'Ba', row: 6, col: 2 }, { symbol: 'La', row: 6, col: 3 }, /* ランタノイド */ { symbol: 'Hf', row: 6, col: 4 }, { symbol: 'Ta', row: 6, col: 5 }, { symbol: 'W', row: 6, col: 6 }, { symbol: 'Re', row: 6, col: 7 }, { symbol: 'Os', row: 6, col: 8 }, { symbol: 'Ir', row: 6, col: 9 }, { symbol: 'Pt', row: 6, col: 10 }, { symbol: 'Au', row: 6, col: 11 }, { symbol: 'Hg', row: 6, col: 12 },
     { symbol: 'Tl', row: 6, col: 13 }, { symbol: 'Pb', row: 6, col: 14 }, { symbol: 'Bi', row: 6, col: 15 }, { symbol: 'Po', row: 6, col: 16 }, { symbol: 'At', row: 6, col: 17 }, { symbol: 'Rn', row: 6, col: 18 },
-    // Period 7 (第7周期)
+    // Period 7
     { symbol: 'Fr', row: 7, col: 1 }, { symbol: 'Ra', row: 7, col: 2 }, { symbol: 'Ac', row: 7, col: 3 }, /* アクチノイド */ { symbol: 'Rf', row: 7, col: 4 }, { symbol: 'Db', row: 7, col: 5 }, { symbol: 'Sg', row: 7, col: 6 }, { symbol: 'Bh', row: 7, col: 7 }, { symbol: 'Hs', row: 7, col: 8 }, { symbol: 'Mt', row: 7, col: 9 }, { symbol: 'Ds', row: 7, col: 10 }, { symbol: 'Rg', row: 7, col: 11 }, { symbol: 'Cn', row: 7, col: 12 },
     { symbol: 'Nh', row: 7, col: 13 }, { symbol: 'Fl', row: 7, col: 14 }, { symbol: 'Mc', row: 7, col: 15 }, { symbol: 'Lv', row: 7, col: 16 }, { symbol: 'Ts', row: 7, col: 17 }, { symbol: 'Og', row: 7, col: 18 }
 ];
@@ -87,12 +91,12 @@ const activeElements = ['H', 'O', 'C', 'N'];
 
 // 周期表のボタンを（再）配置する関数
 function setupPeriodicTable() {
-    periodicTableElements = []; 
+    periodicTableElements = [];
     let gridCellSize = 35;
-    let gridMargin = 4;    
+    let gridMargin = 4;
     let availableWidth = (width - gameAreaWidth) - 60;
     gridCellSize = (availableWidth / 18) - gridMargin;
-    gridCellSize = max(gridCellSize, 15); 
+    gridCellSize = max(gridCellSize, 15);
     let totalCellSize = gridCellSize + gridMargin;
     let gridStartX = gameAreaWidth + 30;
     let gridStartY = 50;
@@ -113,31 +117,37 @@ function setupPeriodicTable() {
 function draw() {
     if (gameState === 'start') {
         drawStartScreen();
-        
+
     } else if (gameState === 'stage' || gameState === 'gameover') {
         // 'stage' と 'gameover' 共通の描画（ゲーム画面）
-        background(100, 150, 100); 
-        
+        background(100, 150, 100);
+
         drawGrid(); // グリッドを描画
-        
-        drawAreas();
+        drawAreas(); // エリア分け線
+
+        // 周期表
         for (let el of periodicTableElements) { el.draw(); }
         
-        // ★★★ ホバーした元素のコストを表示 (新規追加) ★★★
+        // ★コストツールチップ (Energy機能)
         drawCostTooltip();
 
         // --- ゲームエリア内の描画 ---
+        
+        // エディター要素（障害物・経路）の描画（ステージ中でも表示する）
+        drawObstacles();
+        drawPathNodes(); // プレイ中は線やノードは薄くするか、デバッグ用として残すか。今回は薄く表示。
+
         if (mainTower) { mainTower.draw(); }
-        
-        // 1. 配置された元素 (タワー, H2O含む)
+
+        // 1. 配置された元素
         for (let el of placedGameElements) { el.draw(); }
-        
+
         // 2. 合成ヒント
         drawCombinationHints();
 
         // 3. 弾丸
-        for (let b of bullets) { b.draw(); } 
-        
+        for (let b of bullets) { b.draw(); }
+
         // 4. 敵
         for (let e of enemies) { e.draw(); }
 
@@ -153,30 +163,31 @@ function draw() {
             textSize(draggingElement.size * 0.6);
             text(draggingElement.name, mouseX, mouseY);
         }
-        
+
         // ゲームロジックの更新は 'stage' の時だけ
         if (!menuOpen && gameState === 'stage') {
             updateGameLogic();
         }
-        
-        // ★★★ エネルギーバーを描画 ★★★
+
+        // ★エネルギーバー (Energy機能)
         drawEnergyBar();
 
         // メニュー描画
-        drawMenuOverlay(); 
-        
+        drawMenuOverlay();
+
         // ゲームオーバー画面のオーバーレイ
         if (gameState === 'gameover') {
             drawGameOverScreen();
         }
+    } else if (gameState === 'editor') {
+        drawEditorScreen();
     }
 }
 
-// drawAreas() 関数
 function drawAreas() {
     fill(200);
     noStroke();
-    rect(gameAreaWidth, 0, width - gameAreaWidth, height); 
+    rect(gameAreaWidth, 0, width - gameAreaWidth, height);
     stroke(0);
     strokeWeight(4);
     line(gameAreaWidth, 0, gameAreaWidth, height);
@@ -188,24 +199,33 @@ function drawAreas() {
     text("■ 周期表エリア", gameAreaWidth + 10, 10);
 }
 
+
 // ===================================
 // 3. マウス操作関数
 // ===================================
 function mousePressed() {
-    
+
     // A. スタート画面
     if (gameState === 'start') {
-        gameState = 'stage'; 
-        initializeStage(); 
+        // 1. ゲーム開始ボタン
+        if (mouseY < height / 2 + 100 && mouseY > height / 2) {
+            gameState = 'stage';
+            initializeStage();
+            return;
+        }
+        // 2. エディター開始ボタン
+        if (mouseY > height / 2 + 150 && mouseY < height / 2 + 200) {
+            gameState = 'editor';
+            initializeEditor();
+            return;
+        }
         return;
     }
-    
+
     // B. ステージ画面
     if (gameState === 'stage') {
-        
-        // ★ 修正 ★ メニューボタンのX座標をここで計算
-        let buttonX = width - MENU_BUTTON_SIZE - 8; 
-        
+        let buttonX = width - MENU_BUTTON_SIZE - 8;
+
         // 1. メニューボタン
         if (mouseX > buttonX && mouseX < buttonX + MENU_BUTTON_SIZE &&
             mouseY > MENU_BUTTON_Y && mouseY < MENU_BUTTON_Y + MENU_BUTTON_SIZE) {
@@ -223,35 +243,41 @@ function mousePressed() {
             let y = centerY - BUTTON_H / 2;
 
             if (mouseX > x && mouseX < x + BUTTON_W && mouseY > y && mouseY < y + BUTTON_H) {
-                gameState = 'start'; 
-                menuOpen = false;    
+                gameState = 'start';
+                menuOpen = false;
                 return;
             }
         }
-        
+
         // 3. 元素のドラッグ開始
         if (!menuOpen) {
-             for (let el of periodicTableElements) {
+            for (let el of periodicTableElements) {
                 if (el.isMouseOver()) {
                     draggingElement = {
                         name: el.name,
                         color: el.color,
-                        size: el.size + 10 
+                        size: el.size + 10
                     };
-                    break; 
+                    break;
                 }
             }
         }
-        return; 
+        return;
     }
-    
-    // C. ゲームオーバー画面
+
+    // C. エディター画面
+    if (gameState === 'editor') {
+        handleEditorMousePressed();
+        return;
+    }
+
+    // D. ゲームオーバー画面
     if (gameState === 'gameover') {
         const BUTTON_W = 200;
         const BUTTON_H = 50;
         let centerX = width / 2;
         let centerY = height / 2;
-        
+
         let restartX = centerX - BUTTON_W / 2;
         let restartY = centerY;
         let titleX = centerX - BUTTON_W / 2;
@@ -260,15 +286,15 @@ function mousePressed() {
         // 1. リスタート
         if (mouseX > restartX && mouseX < restartX + BUTTON_W &&
             mouseY > restartY && mouseY < restartY + BUTTON_H) {
-            initializeStage(); 
-            gameState = 'stage';   
+            initializeStage();
+            gameState = 'stage';
             return;
         }
 
         // 2. タイトルに戻る
         if (mouseX > titleX && mouseX < titleX + BUTTON_W &&
             mouseY > titleY && mouseY < titleY + BUTTON_H) {
-            gameState = 'start'; 
+            gameState = 'start';
             return;
         }
     }
@@ -276,36 +302,50 @@ function mousePressed() {
 
 // mouseReleased()
 function mouseReleased() {
-    if (draggingElement) {
-        // ゲームエリア（左半分）か？
+    // --- ステージモード：ユニット配置 ---
+    if (gameState === 'stage' && draggingElement) {
         if (mouseX < gameAreaWidth) {
             
-            // ★★★ コストチェックを追加 ★★★
-            let cost = elementCosts[draggingElement.name] || 0; // コストを取得
+            // ★エネルギーチェック (Energy機能)
+            let cost = elementCosts[draggingElement.name] || 0;
             
-            if (currentEnergy >= cost) { // 1. エネルギーが足りるか？
-                // 足りる場合：配置実行
-                currentEnergy -= cost; // 2. エネルギーを消費
-                
-                placedGameElements.push(
-                    new PlacedElement(
-                        draggingElement.name,
-                        mouseX,
-                        mouseY,
-                        draggingElement.size
-                    )
-                );
-            } else {
-                // 足りない場合：配置しない
-                console.log("エネルギー不足！ 配置できません。");
+            // 障害物との重なりチェック
+            let isOverlapping = false;
+            for(let obs of obstacles) {
+                if(dist(mouseX, mouseY, obs.x, obs.y) < obs.size/2 + draggingElement.size/2) {
+                    isOverlapping = true;
+                    break;
+                }
             }
-            // ★★★ コストチェック終了 ★★★
-            
+
+            if (!isOverlapping) {
+                if (currentEnergy >= cost) {
+                    currentEnergy -= cost;
+                    placedGameElements.push(
+                        new PlacedElement(
+                            draggingElement.name,
+                            mouseX,
+                            mouseY,
+                            draggingElement.size
+                        )
+                    );
+                } else {
+                    console.log("エネルギー不足！");
+                }
+            } else {
+                console.log("障害物の上には置けません");
+            }
         }
-        // ドラッグ状態を解除
         draggingElement = null;
+        return;
+    }
+
+    // --- エディターモード：ドラッグ解除 ---
+    if (gameState === 'editor') {
+        draggingNode = null;
     }
 }
+
 
 // ===================================
 // 4. 描画・ロジック関数
@@ -318,28 +358,132 @@ function drawStartScreen() {
     textSize(48);
     textAlign(CENTER, CENTER);
     text('タワーディフェンス', width / 2, height / 2 - 50);
+
+    // ゲーム開始ボタン
+    fill(50, 200, 50);
+    rect(width / 2 - 100, height / 2, 200, 50, 5);
+    fill(255);
     textSize(24);
-    text('クリックでゲーム開始', width / 2, height / 2 + 50);
+    text('ゲーム開始', width / 2, height / 2 + 25);
+
+    // エディター開始ボタン
+    fill(50, 50, 200);
+    rect(width / 2 - 100, height / 2 + 150, 200, 50, 5);
+    fill(255);
+    textSize(24);
+    text('エディター', width / 2, height / 2 + 175);
 }
+
+// --- 4-2. エディター画面の描画 ---
+function drawEditorScreen() {
+    background(100, 150, 100);
+    drawGrid();
+    drawAreas(); // エリア境界線
+
+    // エディター上のオブジェクト描画
+    drawObstacles();
+    drawPathNodes();
+    
+    // 配置済みのタワーも参考表示（透過）
+    for (let el of placedGameElements) { 
+        push();
+        drawingContext.globalAlpha = 0.5;
+        el.draw(); 
+        pop();
+    }
+
+    // エディターUI
+    fill(200, 200, 255, 180);
+    rect(gameAreaWidth + 10, height - 120, width - gameAreaWidth - 20, 110, 5);
+
+    fill(0);
+    textSize(20);
+    textAlign(LEFT, TOP);
+    text("■ エディターモード", gameAreaWidth + 20, height - 110);
+    text("現在のモード: " + editorState, gameAreaWidth + 20, height - 80);
+
+    drawEditorButtons();
+}
+
+function drawEditorButtons() {
+    const BUTTON_W = 100;
+    const BUTTON_H = 30;
+    const START_X = gameAreaWidth + 20;
+    const START_Y = height - 50;
+    const MARGIN = 10;
+    let x = START_X;
+
+    let buttons = [
+        { mode: 'path', label: '経路設定', color: [255, 100, 100] },
+        { mode: 'obstacle', label: '障害物', color: [100, 100, 100] },
+        { mode: 'placement', label: '設置エリア', color: [100, 255, 100] }, // 今回は簡易版のため省略
+    ];
+
+    for (let i = 0; i < buttons.length; i++) {
+        let btn = buttons[i];
+        let isSelected = btn.mode === editorState;
+
+        if (isSelected) {
+            fill(btn.color[0], btn.color[1], btn.color[2], 255);
+        } else if (mouseX > x && mouseX < x + BUTTON_W && mouseY > START_Y && mouseY < START_Y + BUTTON_H) {
+            fill(btn.color[0], btn.color[1], btn.color[2], 180);
+        } else {
+            fill(btn.color[0], btn.color[1], btn.color[2], 100);
+        }
+
+        rect(x, START_Y, BUTTON_W, BUTTON_H, 5);
+
+        fill(255);
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text(btn.label, x + BUTTON_W / 2, START_Y + BUTTON_H / 2);
+
+        if (i < buttons.length - 1) {
+            x += BUTTON_W + MARGIN;
+        }
+    }
+
+    // タイトルに戻るボタン
+    const BACK_BUTTON_W = 150;
+    let backX = width - BACK_BUTTON_W - 10;
+    let backY = height - 50;
+
+    if (mouseX > backX && mouseX < backX + BACK_BUTTON_W && mouseY > backY && mouseY < backY + BUTTON_H) {
+        fill(255, 50, 50);
+    } else {
+        fill(200, 50, 50);
+    }
+    rect(backX, backY, BACK_BUTTON_W, BUTTON_H, 5);
+
+    fill(255);
+    textSize(14);
+    textAlign(CENTER, CENTER);
+    text('タイトルに戻る', backX + BACK_BUTTON_W / 2, backY + BUTTON_H / 2);
+}
+
 
 // --- 4-3. ゲームロジックの更新 ---
 function updateGameLogic() {
-    // ★★★ 1. エネルギーの自然回復 (deltaTime対応) ★★★
+    // ★エネルギー自然回復 (DeltaTime対応)
     if (currentEnergy < maxEnergy) {
-        // deltaTimeはミリ秒なので / 1000 して秒にする
         let recoveryAmount = energyRegenPerSecond * (deltaTime / 1000);
-        currentEnergy += recoveryAmount; 
-        currentEnergy = min(currentEnergy, maxEnergy); // 最大値を超えないように
+        currentEnergy += recoveryAmount;
+        currentEnergy = min(currentEnergy, maxEnergy);
     }
-    // 1. 敵の生成 (★ 修正 ★ 時間ベースの生成)
+
+    // 1. 敵の生成
     if (millis() - lastSpawnTime > SPAWN_INTERVAL) {
-        if (100 < gameAreaWidth) { 
-             enemies.push(new Enemy(100, 100));
+        // ★経路の最初のノードから出現
+        if (pathNodes.length > 0) {
+            enemies.push(new Enemy(pathNodes[0].x, pathNodes[0].y, pathNodes));
+        } else if (100 < gameAreaWidth) {
+            // 経路未設定時のデフォルト
+            enemies.push(new Enemy(100, 100, []));
         }
-        lastSpawnTime = millis(); // ★ タイマーをリセット
+        lastSpawnTime = millis();
     }
-    
-    // 2. タワーの攻撃 (H2O含む)
+
+    // 2. タワーの攻撃
     for (let tower of placedGameElements) {
         tower.findTargetAndAttack(enemies, bullets);
     }
@@ -347,20 +491,21 @@ function updateGameLogic() {
     // 3. 弾丸の移動と衝突
     for (let i = bullets.length - 1; i >= 0; i--) {
         let bullet = bullets[i];
-        bullet.update(); // ★ 修正 ★ update()内でdeltaTimeが使われる
+        bullet.update();
 
         let hitEnemy = bullet.hitscan(enemies);
         if (hitEnemy) {
-            hitEnemy.takeDamage(bullet.damage); 
-            bullets.splice(i, 1); 
+            hitEnemy.takeDamage(bullet.damage);
+            bullets.splice(i, 1);
             continue;
         }
 
+        // ★UIエリアへの飛び込み防止 (gameAreaWidthで判定)
         if (bullet.x < 0 || bullet.x > gameAreaWidth || bullet.y < 0 || bullet.y > height) {
             bullets.splice(i, 1);
         }
     }
-    
+
     // 4. 敵の移動と基地への衝突
     for (let i = enemies.length - 1; i >= 0; i--) {
         let e = enemies[i];
@@ -370,32 +515,30 @@ function updateGameLogic() {
         if (mainTower && mainTower.isAlive()) {
             let distance = dist(e.x, e.y, mainTower.x, mainTower.y);
             let collisionThreshold = e.radius + mainTower.radius;
-            
+
             if (distance < collisionThreshold) {
                 e.isCollidingWithTower = true;
-                mainTower.takeDamage(1); 
+                mainTower.takeDamage(1);
             }
         }
 
-        // 4-b. 敵の移動 (★ 修正 ★ move1()内でdeltaTimeが使われる)
-        e.move1(gameAreaWidth, height); 
-    
+        // 4-b. 敵の移動 (経路追従)
+        e.followPath();
+
         // 4-c. 敵の死亡判定
         if (e.isDead() || e.x < 0 || e.y < 0 || e.x > width || e.y > height) {
-            // ★★★ 敵を倒した報酬を追加 ★★★
-            // 画面外に出ただけでは報酬を与えず、HP0で死んだ場合(isDead)のみ
-            if (e.isDead()) { 
-                 currentEnergy += enemyKillReward;
-                 currentEnergy = min(currentEnergy, maxEnergy); // 最大値を超えない
+            // ★撃破報酬
+            if (e.isDead()) {
+                currentEnergy += enemyKillReward;
+                currentEnergy = min(currentEnergy, maxEnergy);
             }
-            // ★★★ 報酬処理 終了 ★★★
             enemies.splice(i, 1);
         }
-    } 
-    
+    }
+
     // 5. 合成ヒントの検索
     findCombinationHints();
-    
+
     // 6. 化学反応のチェック
     checkAndPerformReactions();
 
@@ -410,33 +553,51 @@ function updateGameLogic() {
 function initializeStage() {
     console.log("ステージ初期化完了");
     menuOpen = false;
-    
+
     // 全ての状態をリセット
     enemies = [];
     placedGameElements = [];
-    bullets = []; 
-    combinationHints = []; 
-    lastSpawnTime = millis(); // ★ 追加 ★ 敵生成タイマーをリセット
-    
-    let towerX = gameAreaWidth - 50; 
-    let towerY = height / 2;
+    bullets = [];
+    combinationHints = [];
+    lastSpawnTime = millis();
+
+    // 基地の位置は最後の経路ノード（またはデフォルト）
+    let towerX, towerY;
+    if (pathNodes.length > 0) {
+        towerX = pathNodes[pathNodes.length - 1].x;
+        towerY = pathNodes[pathNodes.length - 1].y;
+    } else {
+        towerX = gameAreaWidth - 50;
+        towerY = height / 2;
+    }
+
     mainTower = new MainTower(towerX, towerY, 60);
     
-    // ★★★ エネルギーを初期化 ★★★
-    currentEnergy = 100; // スタート時のエネルギー
-    loop(); 
+    // ★エネルギー初期化
+    currentEnergy = 100;
+    loop();
 }
 
+// --- 4-5. エディター開始時の初期化 ---
+function initializeEditor() {
+    console.log("エディター初期化完了");
+    editorState = 'path';
+    // 初期経路ノードがない場合、デフォルトのノードを追加
+    if (pathNodes.length === 0) {
+        pathNodes.push({ x: 50, y: height / 4, radius: 20, isStart: true });
+        pathNodes.push({ x: gameAreaWidth - 50, y: height / 2, radius: 20, isStart: false });
+    }
+}
+
+
 // ===================================
-// 5. メニュー機能の描画
+// 5. メニュー機能・UIの描画
 // ===================================
 
 function drawMenuOverlay() {
-    // ★ 修正 ★ ボタンのX座標を width から計算
-    let buttonX = width - MENU_BUTTON_SIZE - 8; // 右端から8pxオフセット
-    
+    let buttonX = width - MENU_BUTTON_SIZE - 8;
     if (gameState !== 'gameover') {
-         drawMenuButton(buttonX, MENU_BUTTON_Y, MENU_BUTTON_SIZE, menuOpen);
+        drawMenuButton(buttonX, MENU_BUTTON_Y, MENU_BUTTON_SIZE, menuOpen);
     }
     if (menuOpen) {
         drawMenuPanel();
@@ -445,18 +606,18 @@ function drawMenuOverlay() {
 
 function drawMenuButton(x, y, size, isOpen) {
     noStroke();
-    fill(0, 0, 0, 150); 
-    rect(x, y, size, size, 5); 
-    fill(255); 
-    let h = size * 0.1; 
-    let w = size * 0.6; 
+    fill(0, 0, 0, 150);
+    rect(x, y, size, size, 5);
+    fill(255);
+    let h = size * 0.1;
+    let w = size * 0.6;
     let offset = size * 0.25;
 
-    if (!isOpen) { 
+    if (!isOpen) {
         rect(x + offset / 2, y + offset, w, h);
         rect(x + offset / 2, y + size / 2 - h / 2, w, h);
         rect(x + offset / 2, y + size - offset - h, w, h);
-    } else { 
+    } else {
         push();
         translate(x + size / 2, y + size / 2);
         rectMode(CENTER);
@@ -469,8 +630,8 @@ function drawMenuButton(x, y, size, isOpen) {
 }
 
 function drawMenuPanel() {
-    fill(0, 0, 0, 200); 
-    rectMode(CORNER); 
+    fill(0, 0, 0, 200);
+    rectMode(CORNER);
     rect(width / 2 - 150, height / 2 - 100, 300, 200, 10);
     drawBackButton(width / 2, height / 2);
 }
@@ -482,11 +643,11 @@ function drawBackButton(centerX, centerY) {
     let y = centerY - BUTTON_H / 2;
 
     if (mouseX > x && mouseX < x + BUTTON_W && mouseY > y && mouseY < y + BUTTON_H && menuOpen) {
-        fill(255, 100, 100); 
+        fill(255, 100, 100);
     } else {
-        fill(255, 50, 50); 
+        fill(255, 50, 50);
     }
-    rectMode(CORNER); 
+    rectMode(CORNER);
     rect(x, y, BUTTON_W, BUTTON_H, 5);
     fill(255);
     textSize(20);
@@ -494,53 +655,104 @@ function drawBackButton(centerX, centerY) {
     text('スタート画面に戻る', centerX, centerY);
 }
 
-// --- 5-X. ゲームオーバー画面の描画 ---
+// ★エネルギーバー描画
+function drawEnergyBar() {
+    let barWidth = (width - gameAreaWidth) - 60;
+    let barHeight = 25;
+    let barX = gameAreaWidth + 30;
+    let barY = height - 40 - barHeight;
+
+    fill(50);
+    noStroke();
+    rectMode(CORNER);
+    rect(barX, barY, barWidth, barHeight, 5);
+
+    let currentBarWidth = map(currentEnergy, 0, maxEnergy, 0, barWidth);
+    fill(50, 150, 255);
+    rect(barX, barY, currentBarWidth, barHeight, 5);
+
+    fill(255);
+    textSize(16);
+    textAlign(CENTER, CENTER);
+    let energyText = `${floor(currentEnergy)} / ${maxEnergy}`;
+    text(energyText, barX + barWidth / 2, barY + barHeight / 2);
+
+    fill(0);
+    textAlign(LEFT, BOTTOM);
+    textSize(14);
+    text("ENERGY", barX, barY - 5);
+}
+
+// ★コストツールチップ
+function drawCostTooltip() {
+    let hoveredEl = periodicTableElements.find(el => el.isMouseOver() && el.isActive);
+    if (hoveredEl) {
+        let cost = elementCosts[hoveredEl.name];
+        if (cost !== undefined) {
+            let tooltipW = 60;
+            let tooltipH = 30;
+            let x = mouseX + 15;
+            let y = mouseY + 15;
+
+            if (x + tooltipW > width) x = mouseX - tooltipW - 15;
+            if (y + tooltipH > height) y = mouseY - tooltipH - 15;
+
+            fill(0, 0, 0, 200);
+            noStroke();
+            rectMode(CORNER);
+            rect(x, y, tooltipW, tooltipH, 5);
+
+            fill(255);
+            textSize(14);
+            textAlign(LEFT, CENTER);
+            text(`Cost: ${cost}`, x + 8, y + tooltipH / 2);
+        }
+    }
+}
+
 function drawGameOverScreen() {
-    fill(0, 0, 0, 180); 
+    fill(0, 0, 0, 180);
     rectMode(CORNER);
     rect(0, 0, width, height);
-    
-    fill(255, 0, 0); 
+
+    fill(255, 0, 0);
     textSize(64);
     textAlign(CENTER, CENTER);
     text('GAME OVER', width / 2, height / 2 - 100);
-    
+
     const BUTTON_W = 200;
     const BUTTON_H = 50;
     let centerX = width / 2;
     let centerY = height / 2;
-    
     let restartX = centerX - BUTTON_W / 2;
     let restartY = centerY;
     let titleX = centerX - BUTTON_W / 2;
-    let titleY = centerY + BUTTON_H + 20; 
+    let titleY = centerY + BUTTON_H + 20;
 
-    // --- リスタートボタン ---
     if (mouseX > restartX && mouseX < restartX + BUTTON_W &&
         mouseY > restartY && mouseY < restartY + BUTTON_H) {
-        fill(100, 255, 100); 
+        fill(100, 255, 100);
     } else {
-        fill(50, 200, 50); 
+        fill(50, 200, 50);
     }
     rectMode(CORNER);
     rect(restartX, restartY, BUTTON_W, BUTTON_H, 5);
-    
-    fill(0); 
+
+    fill(0);
     textSize(20);
     textAlign(CENTER, CENTER);
     text('リスタート', centerX, restartY + BUTTON_H / 2);
 
-    // --- タイトルに戻るボタン ---
     if (mouseX > titleX && mouseX < titleX + BUTTON_W &&
         mouseY > titleY && mouseY < titleY + BUTTON_H) {
-        fill(100, 100, 255); 
+        fill(100, 100, 255);
     } else {
-        fill(50, 50, 200); 
+        fill(50, 50, 200);
     }
     rectMode(CORNER);
     rect(titleX, titleY, BUTTON_W, BUTTON_H, 5);
-    
-    fill(255); 
+
+    fill(255);
     textSize(20);
     textAlign(CENTER, CENTER);
     text('タイトルに戻る', centerX, titleY + BUTTON_H / 2);
@@ -551,57 +763,54 @@ function drawGameOverScreen() {
 // 6. クラス定義
 // ===================================
 
-// --- 周期表の元素クラス ---
 class PeriodicElement {
     constructor(name, x, y, size, isActive) {
         this.name = name;
         this.x = x;
         this.y = y;
         this.size = size;
-        this.isActive = isActive; 
-        
+        this.isActive = isActive;
         if (this.isActive) {
-            this.color = colors[name] || '#AAAAAA'; 
+            this.color = colors[name] || '#AAAAAA';
         } else {
             this.color = '#BBBBBB';
         }
     }
-    
+
     draw() {
         strokeWeight(2);
         if (this.isActive && this.isMouseOver()) {
-            stroke(255, 204, 0); 
+            stroke(255, 204, 0);
         } else {
             stroke(0);
         }
         fill(this.color);
         rectMode(CORNER);
-        rect(this.x, this.y, this.size, this.size, 5); 
-        
+        rect(this.x, this.y, this.size, this.size, 5);
+
         let textColor;
         if (this.isActive) {
-            textColor = (this.name === 'H' ? 0 : 255); 
+            textColor = (this.name === 'H' ? 0 : 255);
         } else {
             textColor = '#777777';
         }
-        
+
         fill(textColor);
         noStroke();
         textAlign(CENTER, CENTER);
-        textSize(this.size * 0.5); 
+        textSize(this.size * 0.5);
         text(this.name, this.x + this.size / 2, this.y + this.size / 2);
     }
-    
+
     isMouseOver() {
         if (!this.isActive) {
             return false;
         }
         return mouseX > this.x && mouseX < this.x + this.size &&
-               mouseY > this.y && mouseY < this.y + this.size;
+            mouseY > this.y && mouseY < this.y + this.size;
     }
 }
 
-// --- ゲームエリアに配置された元素（防衛ユニット）クラス ---
 class PlacedElement {
     constructor(name, x, y, size) {
         this.name = name;
@@ -610,83 +819,59 @@ class PlacedElement {
         this.size = size;
         this.radius = this.size / 2;
         this.color = colors[name] || '#AAAAAA';
-        
-        this.reacted = false; 
+        this.reacted = false;
         this.lastAttackTime = 0;
 
-        // 名前によってステータスを変更
+        // ユニットの性能設定
         if (this.name === 'H2O') {
-            this.size *= 1.2; 
+            this.size *= 1.2;
             this.radius = this.size / 2;
-
-            // H2O専用の攻撃ステータス (より強く、より遅く)
-            this.range = 200;           
-            this.attackDamage = 30;     
-            this.fireRate = 500;        // 0.5秒に1回発射
-            this.reacted = true;        
-            
+            this.range = 200;
+            this.attackDamage = 30;
+            this.fireRate = 500;
+            this.reacted = true;
         } else {
-            // H, O などの基本元素のステータス
-            this.range = 150; 
+            this.range = 150;
             this.attackDamage = 10;
-            this.fireRate = 1000; // 1000ミリ秒 (1秒) に1回
+            this.fireRate = 1000;
         }
     }
-    
+
     draw() {
-        // 1. 合成範囲の円
         if (this.name !== 'H2O' && !this.reacted) {
             noFill();
-            stroke(0, 200, 0, 80); 
+            stroke(0, 200, 0, 80);
             strokeWeight(1);
             ellipse(this.x, this.y, REACTION_DISTANCE * 2, REACTION_DISTANCE * 2);
         }
 
-        // 2. 元素本体
         if (this.name === 'H2O') {
-            strokeWeight(3); 
-            stroke(0, 0, 200); 
+            strokeWeight(3);
+            stroke(0, 0, 200);
         } else {
             strokeWeight(2);
-            stroke(0); 
+            stroke(0);
         }
-        
+
         fill(this.color);
         ellipse(this.x, this.y, this.size, this.size);
-        
-        // 3. テキスト
-        let textColor;
-        if (this.name === 'H' || this.name === 'H2O') {
-            textColor = 0; 
-        } else {
-            textColor = 255; 
-        }
-        
+
+        let textColor = (this.name === 'H' || this.name === 'H2O') ? 0 : 255;
         fill(textColor);
         noStroke();
         textAlign(CENTER, CENTER);
-        
         let textSizeRatio = (this.name === 'H2O' ? 0.5 : 0.6);
         textSize(this.size * textSizeRatio);
         text(this.name, this.x, this.y);
     }
 
-    // 攻撃メソッド
     findTargetAndAttack(enemiesArray, bulletsArray) {
-        
-        if (this.reacted && this.name !== 'H2O') {
-            return;
-        }
-        
-        // クールダウン計算 (ミリ秒ベース)
-        if (millis() - this.lastAttackTime < this.fireRate) {
-            return; // まだクールダウン中
-        }
+        if (this.reacted && this.name !== 'H2O') { return; }
+        if (millis() - this.lastAttackTime < this.fireRate) { return; }
 
         let target = null;
         let closestDist = Infinity;
 
-        // 最も近い敵を探す
         for (let enemy of enemiesArray) {
             if (!enemy.isDead()) {
                 let d = dist(this.x, this.y, enemy.x, enemy.y);
@@ -697,183 +882,169 @@ class PlacedElement {
             }
         }
 
-        // ターゲットがいれば攻撃
         if (target) {
-            let bulletColor = (this.name === 'H2O') ? this.color : this.color;
-            bulletsArray.push(new Particle(this.x, this.y, target, this.attackDamage, bulletColor));
-            this.lastAttackTime = millis(); // 攻撃時刻を更新
+            bulletsArray.push(new Particle(this.x, this.y, target, this.attackDamage, this.color));
+            this.lastAttackTime = millis();
         }
     }
 }
 
-
-// --- メインタワー（基地）クラス ---
 class MainTower {
     constructor(x, y, size) {
         this.x = x;
         this.y = y;
         this.size = size;
         this.radius = size / 2;
-        this.maxHp = 500; 
+        this.maxHp = 500;
         this.hp = this.maxHp;
     }
-    
+
     draw() {
         rectMode(CENTER);
         strokeWeight(2);
         stroke(0);
-        fill(150); 
+        fill(150);
         rect(this.x, this.y, this.size, this.size);
-        
+
         fill(0);
         noStroke();
         textAlign(CENTER, CENTER);
         textSize(20);
         text('BASE', this.x, this.y);
-        
-        // HPバー
+
         noStroke();
-        fill(255, 0, 0); 
-        rectMode(CORNER); 
-        rect(this.x - this.radius, this.y + this.radius + 5, this.size, 10); 
-        
+        fill(255, 0, 0);
+        rectMode(CORNER);
+        rect(this.x - this.radius, this.y + this.radius + 5, this.size, 10);
+
         let hpWidth = (this.hp / this.maxHp) * this.size;
-        fill(0, 255, 0); 
+        fill(0, 255, 0);
         rect(this.x - this.radius, this.y + this.radius + 5, hpWidth, 10);
     }
-    
+
     takeDamage(amount) {
         this.hp -= amount;
         if (this.hp < 0) {
             this.hp = 0;
         }
     }
-    
+
     isAlive() {
         return this.hp > 0;
     }
 }
 
-
-// --- 敵クラス --- (★ 修正 ★ deltaTime対応)
-class Enemy{
-  constructor(x, y){
-    this.x = x;
-    this.y = y;
-    this.size = 30;
-    this.radius = this.size / 2;
-    this.health = 100; 
-    this.isCollidingWithTower = false; 
-    
-    // ★ 追加 ★ 速度を「毎秒Xピクセル」で定義
-    this.speed = 80; // (この値は好みで調整してください)
-  }
-  
-  draw() {
-    fill(255, 0, 0); 
-    stroke(0);
-    strokeWeight(1);
-    ellipse(this.x, this.y, this.size, this.size);
-
-    // HPバー
-    let hpBarWidth = this.size * 0.8;
-    let hpBarHeight = 5;
-    let hpRatio = this.health / 100; 
-    fill(0, 255, 0); 
-    noStroke();
-    rect(this.x - hpBarWidth / 2, this.y - this.size / 2 - hpBarHeight - 5, hpBarWidth * hpRatio, hpBarHeight);
-    stroke(0);
-    noFill();
-    rect(this.x - hpBarWidth / 2, this.y - this.size / 2 - hpBarHeight - 5, hpBarWidth, hpBarHeight);
-  }
-
-  takeDamage(amount) {
-      this.health -= amount;
-      if (this.health < 0) {
-          this.health = 0;
-      }
-  }
-
-  isDead() {
-      return this.health <= 0;
-  }
-
-  move1(gameAreaWidth, gameAreaHeight){
-    if (this.isCollidingWithTower) {
-        return; 
+// --- 敵クラス（★経路追従＋DeltaTime対応）---
+class Enemy {
+    constructor(x, y, path) {
+        this.x = x;
+        this.y = y;
+        this.size = 30;
+        this.radius = this.size / 2;
+        this.health = 100;
+        this.isCollidingWithTower = false;
+        this.speed = 80; // 毎秒80ピクセル
+        
+        this.path = path;
+        this.currentPathIndex = 0;
     }
-    
-    // ★ 修正 ★ 経過時間(秒) を計算
-    let dt = deltaTime / 1000; // deltaTimeはミリ秒なので秒に変換
-    
-    // ★ 修正 ★ 「速度 × 時間」で移動距離を計算
-    let moveAmount = this.speed * dt;
-    
-    let turningPointX = gameAreaWidth - 50; 
-    let turningPointY = gameAreaHeight / 2; 
 
-    if(this.x <= turningPointX){
-      if(abs(this.y - turningPointY) < 2){ 
-        // this.x = this.x - 2; // ← 修正前
-        this.x = this.x - moveAmount * 2; // ★ 修正後 (2倍速)
-      }
-      // this.x = this.x + 1; // ← 修正前
-      this.x = this.x + moveAmount; // ★ 修正後
-    } else if (this.y <= turningPointY){
-      // this.y = this.y + 2; // ← 修正前
-      this.y = this.y + moveAmount * 2; // ★ 修正後 (2倍速)
+    draw() {
+        fill(255, 0, 0);
+        stroke(0);
+        strokeWeight(1);
+        ellipse(this.x, this.y, this.size, this.size);
+
+        let hpBarWidth = this.size * 0.8;
+        let hpBarHeight = 5;
+        let hpRatio = this.health / 100;
+        fill(0, 255, 0);
+        noStroke();
+        rect(this.x - hpBarWidth / 2, this.y - this.size / 2 - hpBarHeight - 5, hpBarWidth * hpRatio, hpBarHeight);
+        stroke(0);
+        noFill();
+        rect(this.x - hpBarWidth / 2, this.y - this.size / 2 - hpBarHeight - 5, hpBarWidth, hpBarHeight);
     }
-  }
+
+    takeDamage(amount) {
+        this.health -= amount;
+        if (this.health < 0) this.health = 0;
+    }
+
+    isDead() {
+        return this.health <= 0;
+    }
+
+    followPath() {
+        // 経路がない、もしくはゴール到達済みの場合は動かない
+        if (this.isCollidingWithTower || !this.path || this.currentPathIndex >= this.path.length) {
+            return;
+        }
+
+        let targetNode = this.path[this.currentPathIndex];
+        let dt = deltaTime / 1000; // 秒換算
+        let moveAmount = this.speed * dt;
+
+        let angle = atan2(targetNode.y - this.y, targetNode.x - this.x);
+        let dx = cos(angle) * moveAmount;
+        let dy = sin(angle) * moveAmount;
+
+        let currentDist = dist(this.x, this.y, targetNode.x, targetNode.y);
+
+        if (currentDist <= moveAmount) {
+            // ノード到達。位置を合わせ、次のノードへ
+            this.x = targetNode.x;
+            this.y = targetNode.y;
+            this.currentPathIndex++;
+        } else {
+            this.x += dx;
+            this.y += dy;
+        }
+    }
 }
 
-// --- 弾丸 (パーティクル) クラス --- (★ 修正 ★ deltaTime対応)
+// --- 弾丸クラス（★DeltaTime対応）---
 class Particle {
     constructor(startX, startY, targetEnemy, damage, color) {
         this.x = startX;
         this.y = startY;
-        this.target = targetEnemy; 
+        this.target = targetEnemy;
         this.damage = damage;
         this.color = color;
-        this.size = 10; 
-
-        // ★ 修正 ★ 毎秒のピクセル速度 (値を大きくする)
-        this.speed = 400; 
-
+        this.size = 10;
+        this.speed = 400;
         this.vx = 0;
         this.vy = 0;
-        this.hasTarget = true; 
+        this.hasTarget = true;
     }
 
     update() {
-        // ★ 追加 ★ 経過時間(秒) と このフレームの移動距離
         let dt = deltaTime / 1000;
         let moveAmount = this.speed * dt;
 
         if (this.hasTarget) {
             if (!this.target || this.target.isDead()) {
                 this.hasTarget = false;
-                
-                // ターゲットが消えた瞬間の角度で、毎秒の速度ベクトル(vx, vy)を計算
-                let angle = atan2(this.target.y - this.y, this.target.x - this.x);
+                // ターゲットロスト時の慣性ベクトル計算
+                let angle = 0;
+                if(this.target) {
+                    angle = atan2(this.target.y - this.y, this.target.x - this.x);
+                }
                 this.vx = cos(angle) * this.speed;
                 this.vy = sin(angle) * this.speed;
-                
+
             } else {
-                // ターゲットを追尾
+                // 追尾
                 let angle = atan2(this.target.y - this.y, this.target.x - this.x);
-                // this.x += cos(angle) * this.speed; // ← 修正前
-                // this.y += sin(angle) * this.speed; // ← 修正前
-                this.x += cos(angle) * moveAmount; // ★ 修正後
-                this.y += sin(angle) * moveAmount; // ★ 修正後
-                return; 
+                this.x += cos(angle) * moveAmount;
+                this.y += sin(angle) * moveAmount;
+                return;
             }
         }
-        
-        // ターゲットを失った後は、計算済みの速度ベクトル(vx, vy)を使って直進
-        // this.x += this.vx; // ← 修正前
-        // this.y += this.vy; // ← 修正前
-        this.x += this.vx * dt; // ★ 修正後
-        this.y += this.vy * dt; // ★ 修正後
+
+        // 直進
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
     }
 
     draw() {
@@ -894,14 +1065,10 @@ class Particle {
     }
 }
 
-
 // ===================================
 // 7. 合成機能
 // ===================================
 
-/**
- * 化学反応をチェックし、実行する関数
- */
 function checkAndPerformReactions() {
     let unreactedHs = placedGameElements.filter(el => el.name === 'H' && !el.reacted);
     let unreactedOs = placedGameElements.filter(el => el.name === 'O' && !el.reacted);
@@ -913,8 +1080,7 @@ function checkAndPerformReactions() {
 
             for (let j = 0; j < unreactedHs.length; j++) {
                 let hydrogen = unreactedHs[j];
-                if (hydrogen.reacted) continue; 
-
+                if (hydrogen.reacted) continue;
                 let d = dist(oxygen.x, oxygen.y, hydrogen.x, hydrogen.y);
                 if (d < REACTION_DISTANCE) {
                     nearbyHs.push(hydrogen);
@@ -930,47 +1096,36 @@ function checkAndPerformReactions() {
                 let avgX = (oxygen.x + nearbyHs[0].x + nearbyHs[1].x) / 3;
                 let avgY = (oxygen.y + nearbyHs[0].y + nearbyHs[1].y) / 3;
                 let newSize = (oxygen.size + nearbyHs[0].size + nearbyHs[1].size) / 3;
-                
-                // 1. 素材(H, O)を削除
+
                 placedGameElements = placedGameElements.filter(el => {
-                    if (el.reacted && el.name !== 'H2O') {
-                        return false; 
-                    }
-                    return true; 
+                    if (el.reacted && el.name !== 'H2O') return false;
+                    return true;
                 });
 
-                // 2. H2O を追加
                 placedGameElements.push(new PlacedElement('H2O', avgX, avgY, newSize));
-                
-                break; 
+                break;
             }
         }
     }
 }
 
-
-/**
- * 組み合わせが可能な元素のペアを探し、ヒント配列を更新する
- */
 function findCombinationHints() {
-    combinationHints = []; // 毎フレームリセット
+    combinationHints = [];
     let unreacted = placedGameElements.filter(el => !el.reacted);
 
     for (let i = 0; i < unreacted.length; i++) {
         for (let j = i + 1; j < unreacted.length; j++) {
             let el1 = unreacted[i];
             let el2 = unreacted[j];
-
             let d = dist(el1.x, el1.y, el2.x, el2.y);
 
-            if (d < REACTION_DISTANCE) { 
+            if (d < REACTION_DISTANCE) {
                 let midX = (el1.x + el2.x) / 2;
                 let midY = (el1.y + el2.y) / 2;
-                
+
                 if ((el1.name === 'H' && el2.name === 'O') || (el1.name === 'O' && el2.name === 'H')) {
                     combinationHints.push({ x: midX, y: midY, name: 'H' });
-                } 
-                else if (el1.name === 'H' && el2.name === 'H') {
+                } else if (el1.name === 'H' && el2.name === 'H') {
                     combinationHints.push({ x: midX, y: midY, name: 'O' });
                 }
             }
@@ -978,25 +1133,15 @@ function findCombinationHints() {
     }
 }
 
-/**
- * combinationHints 配列に基づいて、ヒントを画面に描画する
- * (★ 修正 ★ deltaTime対応)
- */
 function drawCombinationHints() {
     for (let hint of combinationHints) {
-        // 1. ハイライト (点滅する黄色の円)
-        // ★ 修正 ★ frameCount依存からmillis()依存に変更
-        // let pulseAlpha = (sin(frameCount * 0.1) + 1) / 2 * 100 + 50; 
         let pulseAlpha = (sin(millis() * 0.006) + 1) / 2 * 100 + 50;
-        
-        let hintColor = color(255, 255, 0, pulseAlpha); 
-        
+        let hintColor = color(255, 255, 0, pulseAlpha);
         noStroke();
         fill(hintColor);
         ellipse(hint.x, hint.y, 40, 40);
 
-        // 2. 必要な元素の文字
-        let textColor = color(0, 0, 0, 150); 
+        let textColor = color(0, 0, 0, 150);
         fill(textColor);
         textSize(30);
         textAlign(CENTER, CENTER);
@@ -1007,143 +1152,143 @@ function drawCombinationHints() {
 // ===================================
 // 8. グリッド描画関数
 // ===================================
-
-/**
- * 背景にグリッド（格子）を描画する関数
- */
 function drawGrid() {
-    let gridSize = 40; 
-
-    stroke(0, 0, 0, 50); 
+    let gridSize = 40;
+    stroke(0, 0, 0, 50);
     strokeWeight(1);
-
-    // 垂直線
     for (let x = 0; x < gameAreaWidth; x += gridSize) {
         line(x, 0, x, height);
     }
-    
-    // 水平線
     for (let y = 0; y < height; y += gridSize) {
         line(0, y, gameAreaWidth, y);
     }
 }
 
 // ===================================
-// 9. ★ 新規追加 ★ ウィンドウリサイズ対応
+// 9. ウィンドウリサイズ対応
 // ===================================
-
-/**
- * ブラウザウィンドウがリサイズされた時に呼び出される関数
- */
 function windowResized() {
-    // キャンバスサイズをウィンドウに合わせる
-    resizeCanvas(windowWidth, windowHeight); 
-    
-    // ゲームエリアの幅を再計算
-    gameAreaWidth = width / 2; 
-    
-    // 周期表のボタン位置を再計算・再配置する
+    resizeCanvas(windowWidth, windowHeight);
+    gameAreaWidth = width / 2;
     setupPeriodicTable();
 }
 
-function drawCostTooltip() {
-    // 1. 周期表の要素の上にあるかチェック
-    // (isMouseOver() と isActive() を両方チェックする)
-    let hoveredEl = periodicTableElements.find(el => el.isMouseOver() && el.isActive);
+// ===================================
+// 10. エディター機能（詳細）
+// ===================================
+const OBSTACLE_SIZE = 40;
+const PATH_NODE_SIZE = 20;
 
-    if (hoveredEl) {
-        // 2. コストを取得
-        let cost = elementCosts[hoveredEl.name];
+function handleEditorMousePressed() {
+    // UIボタン
+    const BUTTON_W = 100;
+    const BUTTON_H = 30;
+    const START_X = gameAreaWidth + 20;
+    const START_Y = height - 50;
+    const MARGIN = 10;
+    let x = START_X;
 
-        // 3. コストが定義されている(undefinedではない)場合のみ描画
-        if (cost !== undefined) {
-            
-            let tooltipW = 60;
-            let tooltipH = 30;
-            // マウスカーソルの少し右下に表示
-            let x = mouseX + 15; 
-            let y = mouseY + 15;
+    let modes = ['path', 'obstacle'];
+    for (let mode of modes) {
+        if (mouseX > x && mouseX < x + BUTTON_W && mouseY > START_Y && mouseY < START_Y + BUTTON_H) {
+            editorState = mode;
+            return;
+        }
+        x += BUTTON_W + MARGIN;
+    }
 
-            // 画面の右端/下端からはみ出ないように調整
-            if (x + tooltipW > width) {
-                x = mouseX - tooltipW - 15; // 右にはみ出るなら左側に表示
+    // 戻るボタン
+    const BACK_BUTTON_W = 150;
+    let backX = width - BACK_BUTTON_W - 10;
+    let backY = height - 50;
+    if (mouseX > backX && mouseX < backX + BACK_BUTTON_W && mouseY > backY && mouseY < backY + BUTTON_H) {
+        gameState = 'start';
+        return;
+    }
+
+    // エリア内操作
+    if (mouseX < gameAreaWidth) {
+        if (mouseButton === LEFT) {
+            if (editorState === 'obstacle') {
+                obstacles.push({ x: mouseX, y: mouseY, size: OBSTACLE_SIZE });
+            } else if (editorState === 'path') {
+                // ドラッグ開始
+                for (let node of pathNodes) {
+                    if (dist(mouseX, mouseY, node.x, node.y) < node.radius + 5) {
+                        draggingNode = node;
+                        return;
+                    }
+                }
+                // 新規ノード
+                pathNodes.push({ x: mouseX, y: mouseY, radius: PATH_NODE_SIZE, isStart: false });
             }
-            if (y + tooltipH > height) {
-                y = mouseY - tooltipH - 15; // 下にはみ出るなら上側に表示
+        } else if (mouseButton === RIGHT) {
+            // 削除処理 (障害物)
+            if (editorState === 'obstacle') {
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    if (dist(mouseX, mouseY, obstacles[i].x, obstacles[i].y) < obstacles[i].size / 2) {
+                        obstacles.splice(i, 1);
+                        break;
+                    }
+                }
             }
-
-            // 4. ツールチップの背景
-            fill(0, 0, 0, 200); // 半透明の黒
-            noStroke();
-            rectMode(CORNER);
-            rect(x, y, tooltipW, tooltipH, 5); // 角丸
-
-            // 5. テキスト
-            fill(255); // 白文字
-            textSize(14);
-            textAlign(LEFT, CENTER);
-            // "Cost: 10" のように表示
-            text(`Cost: ${cost}`, x + 8, y + tooltipH / 2);
+            // 削除処理 (経路ノード)
+            if (editorState === 'path') {
+                for (let i = pathNodes.length - 1; i >= 0; i--) {
+                    if (dist(mouseX, mouseY, pathNodes[i].x, pathNodes[i].y) < pathNodes[i].radius / 2) {
+                        pathNodes.splice(i, 1);
+                        break;
+                    }
+                }
+            }
         }
     }
 }
 
-// ===================================
-// 9. ★ 新規追加 ★ ウィンドウリサイズ対応
-// ===================================
-
-/**
- * ブラウザウィンドウがリサイズされた時に呼び出される関数
- */
-function windowResized() {
-    // キャンバスサイズをウィンドウに合わせる
-    resizeCanvas(windowWidth, windowHeight); 
-    
-    // ゲームエリアの幅を再計算
-    gameAreaWidth = width / 2; 
-    
-    // 周期表のボタン位置を再計算・再配置する
-    setupPeriodicTable();
+function mouseDragged() {
+    if (gameState === 'editor' && mouseX < gameAreaWidth) {
+        if (editorState === 'path' && draggingNode) {
+            draggingNode.x = mouseX;
+            draggingNode.y = mouseY;
+        }
+    }
 }
 
-// ===================================
-// 10. ★ 新規追加 ★ エネルギーUI
-// ===================================
-
-/**
- * エネルギーバーを画面右下（周期表エリア内）に描画する
- */
-function drawEnergyBar() {
-    // 周期表エリアの右下に配置
-    let barWidth = (width - gameAreaWidth) - 60; // 左右の余白30px * 2
-    let barHeight = 25;
-    let barX = gameAreaWidth + 30;
-    let barY = height - 40 - barHeight; // 画面下部から40px上
-
-    // 1. バーの背景 (空の状態)
-    fill(50); // 暗いグレー
-    noStroke();
-    rectMode(CORNER); // 念のためモード指定
-    rect(barX, barY, barWidth, barHeight, 5);
-
-    // 2. 現在のエネルギー量
-    // map(value, start1, stop1, start2, stop2)
-    let currentBarWidth = map(currentEnergy, 0, maxEnergy, 0, barWidth);
-    fill(50, 150, 255); // 青色
-    rect(barX, barY, currentBarWidth, barHeight, 5);
-
-    // 3. テキスト (例: "100 / 200")
-    fill(255);
-    textSize(16);
-    textAlign(CENTER, CENTER);
-    // エネルギーの数値を整数で表示
-    let energyText = `${floor(currentEnergy)} / ${maxEnergy}`;
-    text(energyText, barX + barWidth / 2, barY + barHeight / 2);
-
-    // 4. ラベル "ENERGY"
-    fill(0);
-    textAlign(LEFT, BOTTOM);
-    textSize(14);
-    text("ENERGY", barX, barY - 5);
+function drawObstacles() {
+    for (let obs of obstacles) {
+        fill(50, 50, 50);
+        strokeWeight(2);
+        stroke(0);
+        rectMode(CENTER);
+        rect(obs.x, obs.y, obs.size, obs.size, 5);
+    }
 }
 
+function drawPathNodes() {
+    if (pathNodes.length === 0) return;
+
+    noFill();
+    stroke(255, 0, 0, 150);
+    strokeWeight(3);
+    beginShape();
+    for (let node of pathNodes) {
+        vertex(node.x, node.y);
+    }
+    endShape();
+
+    for (let i = 0; i < pathNodes.length; i++) {
+        let node = pathNodes[i];
+        strokeWeight(2);
+        stroke(0);
+
+        if (i === 0) fill(0, 255, 0);
+        else if (i === pathNodes.length - 1) fill(0, 0, 255);
+        else fill(255, 255, 0);
+
+        ellipse(node.x, node.y, PATH_NODE_SIZE, PATH_NODE_SIZE);
+        fill(0);
+        textSize(10);
+        textAlign(CENTER, CENTER);
+        text(i, node.x, node.y);
+    }
+}
