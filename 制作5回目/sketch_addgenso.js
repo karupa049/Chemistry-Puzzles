@@ -877,7 +877,8 @@ class PlacedElement {
                 this.brightnessVal = 50;
             }
             
-            this.attackDamage = 10;
+            // ★変更点: ダメージをコストと同じにする
+            this.attackDamage = elementCosts[name] || 10;
             this.range = 150;
             this.fireRate = 1000;
         }
@@ -924,9 +925,6 @@ class PlacedElement {
     }
 
     findTargetAndAttack(enemiesArray, bulletsArray) {
-        // ★修正点: 未反応でも攻撃するように guard clause を削除
-        // if (!this.reacted) { return; } 
-        
         if (millis() - this.lastAttackTime < this.fireRate) { return; }
 
         let target = null;
@@ -1039,7 +1037,7 @@ class Enemy {
         this.size = 30;
         this.radius = this.size / 2;
         
-        this.health = 600; 
+        this.health = 500; // ★変更点
         
         this.damageToWall = 0.5; 
         this.speed = 80;
@@ -1056,10 +1054,10 @@ class Enemy {
         strokeWeight(1);
         ellipse(this.x, this.y, this.size, this.size);
 
-        // HPバー (最大値を600として比率計算)
+        // HPバー (最大値を500として比率計算)
         let hpBarWidth = this.size * 0.8;
         let hpBarHeight = 5;
-        let hpRatio = this.health / 600; // ベースHPに応じて変更
+        let hpRatio = this.health / 500; // ★変更点
         fill(0, 255, 0);
         noStroke();
         rect(this.x - hpBarWidth / 2, this.y - this.size / 2 - hpBarHeight - 5, hpBarWidth * hpRatio, hpBarHeight);
@@ -1170,7 +1168,7 @@ class Particle {
 
 
 // ===================================
-// 8. 合成・反応ロジック (汎用化・修正版)
+// 8. 合成・反応ロジック (汎用化)
 // ===================================
 
 function checkAndPerformReactions() {
@@ -1184,7 +1182,7 @@ function checkAndPerformReactions() {
         let coreCandidates = unreactedElements.filter(el => el.name === coreName);
         
         for (let coreEl of coreCandidates) {
-            if (coreEl.reacted) continue; 
+            if (coreEl.reacted) continue; // すでに反応済みならスキップ
 
             let requiredIngredients = { ...recipe.ingredients };
             
@@ -1195,26 +1193,28 @@ function checkAndPerformReactions() {
 
             let foundIngredients = [];
             let allIngredientsFound = true;
-            let totalCost = elementCosts[coreName]; 
+            let totalCost = elementCosts[coreName]; // ダメージ計算用: 中心元素のコスト
 
             // 周囲の必要な元素を探す
             for (let ingName in requiredIngredients) {
                 let countNeeded = requiredIngredients[ingName];
                 
+                // 必要な数が0ならスキップ
                 if (countNeeded <= 0) continue;
 
                 let neighbors = unreactedElements.filter(el => 
                     el !== coreEl && 
-                    !el.reacted && 
-                    !foundIngredients.includes(el) && 
+                    !el.reacted && // 未反応のものだけ
+                    !foundIngredients.includes(el) && // すでに他の材料として確保したものは除外
                     el.name === ingName && 
                     dist(coreEl.x, coreEl.y, el.x, el.y) < REACTION_DISTANCE
                 );
 
                 if (neighbors.length >= countNeeded) {
+                    // 必要な数だけ確保
                     for(let i=0; i<countNeeded; i++) {
                         foundIngredients.push(neighbors[i]);
-                        totalCost += elementCosts[ingName]; 
+                        totalCost += elementCosts[ingName]; // コスト加算
                     }
                 } else {
                     allIngredientsFound = false;
@@ -1226,6 +1226,7 @@ function checkAndPerformReactions() {
             if (allIngredientsFound) {
                 console.log(recipe.name + " 反応成功！");
                 
+                // 位置とサイズの平均を計算
                 let sumX = coreEl.x;
                 let sumY = coreEl.y;
                 let sumSize = coreEl.size;
@@ -1233,7 +1234,6 @@ function checkAndPerformReactions() {
                 // 今回使用した元素をリストアップ
                 let consumedElements = [coreEl, ...foundIngredients];
 
-                // 位置とサイズの計算
                 for(let ing of foundIngredients) {
                     sumX += ing.x;
                     sumY += ing.y;
@@ -1245,7 +1245,8 @@ function checkAndPerformReactions() {
                 let avgY = sumY / count;
                 let newSize = sumSize / count;
 
-                let calculatedDamage = totalCost * 1.2;
+                // ★攻撃力計算 (合計コスト * 2)
+                let calculatedDamage = totalCost * 2;
 
                 // ★修正点: 全体の配列から、今回使った素材だけを取り除く
                 // (以前は reacted フラグがついているものを全て削除していたため、過去の化合物も消えていた)
@@ -1260,7 +1261,8 @@ function checkAndPerformReactions() {
                     calculatedDamage
                 ));
                 
-                return; // 配列操作したので一度ループを抜ける
+                // 配列が変更されたので、外側のループをやり直す（安全策）
+                return; 
             }
         }
     }
@@ -1270,6 +1272,8 @@ function findCombinationHints() {
     combinationHints = [];
     let unreacted = placedGameElements.filter(el => !el.reacted);
     
+    // 単純なペアチェック（ヒント用）
+    // ※複雑なレシピに対応するにはここも拡張が必要だが、今回は距離が近いペアのみ表示
     for (let i = 0; i < unreacted.length; i++) {
         for (let j = i + 1; j < unreacted.length; j++) {
             let el1 = unreacted[i];
@@ -1278,6 +1282,10 @@ function findCombinationHints() {
             if (d < REACTION_DISTANCE) {
                 let midX = (el1.x + el2.x) / 2;
                 let midY = (el1.y + el2.y) / 2;
+                
+                // ヒント表示ロジック（簡易版：レシピに含まれる組み合わせなら線を引く等の演出）
+                // ここでは単純にレシピ内のペアなら「？」を出すなどの処理が可能
+                // 今回はシンプルにH2Oのヒントロジックを残しつつ、距離が近いことを示す
                 combinationHints.push({ x: midX, y: midY, name: '!' });
             }
         }
