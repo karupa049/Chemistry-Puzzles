@@ -299,12 +299,32 @@ function mousePressed() {
         }
 
         let buttonX = width - MENU_BUTTON_SIZE - 8;
-        // メニューボタン
+        // メニューボタン（右上のハンバーガーアイコン）
         if (mouseX > buttonX && mouseX < buttonX + MENU_BUTTON_SIZE &&
             mouseY > MENU_BUTTON_Y && mouseY < MENU_BUTTON_Y + MENU_BUTTON_SIZE) {
             menuOpen = !menuOpen;
             return;
         }
+
+        // ▼▼▼▼▼▼▼▼▼▼ 修正箇所ここから ▼▼▼▼▼▼▼▼▼▼
+        if (menuOpen) {
+            // メニューが開いている場合、「スタート画面に戻る」ボタンの判定を行う
+            const BUTTON_W = 200;
+            const BUTTON_H = 50;
+            let centerX = width / 2;
+            let centerY = height / 2;
+            let btnX = centerX - BUTTON_W / 2;
+            let btnY = centerY - BUTTON_H / 2;
+
+            if (mouseX > btnX && mouseX < btnX + BUTTON_W &&
+                mouseY > btnY && mouseY < btnY + BUTTON_H) {
+                gameState = 'start'; // タイトルへ戻る
+                menuOpen = false;    // メニューを閉じる状態に戻しておく
+            }
+            // メニューが開いているときは、これ以降のゲーム内操作（元素配置など）を行わないためreturnする
+            return;
+        }
+        // ▲▲▲▲▲▲▲▲▲▲ 修正箇所ここまで ▲▲▲▲▲▲▲▲▲▲
 
         if (!menuOpen) {
             // 周期表エリアでのクリック (ドラッグ/選択開始)
