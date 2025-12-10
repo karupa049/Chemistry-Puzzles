@@ -10,22 +10,23 @@ let clickStartedInGameArea = false;
 let periodicTableElements = [];
 let placedGameElements = [];
 let draggingElement = null;
-let combinationHints = [];
 
 // ★追加: 最後に操作したユニットの情報（パネル表示用）
 let lastSelectedUnit = null; 
+// ★追加: 最後にヒントを表示した対象（レシピヒント固定用）
+let lastHintTarget = null; 
 
 // --- 敵・基地・弾丸・障害物関連 ---
 let enemies = [];
 let mainTower;
 let bullets = [];
-let shockwaves = [];      // 敵攻撃の衝撃波
+let shockwaves = [];      
 let gameObstacles = [];
 let lastSpawnTime = 0;
 const SPAWN_INTERVAL = 1000;
-let enemiesSpawned = 0;       // 出現させた敵の総数
-let enemiesDefeated = 0;      // 撃破した敵の総数
-const TOTAL_ENEMIES_TO_SPAWN = 100; // ステージで出現させる敵の総数
+let enemiesSpawned = 0;       
+let enemiesDefeated = 0;      
+const TOTAL_ENEMIES_TO_SPAWN = 100; 
 
 // --- エネルギー（コスト）関連 ---
 let currentEnergy = 100;
@@ -33,7 +34,7 @@ let maxEnergy = 1000;
 let energyRegenPerSecond = 5;
 let enemyKillReward = 15;
 
-// --- 元素ごとのコスト定義 (setupで自動計算) ---
+// --- 元素ごとのコスト定義 ---
 let elementCosts = {};
 
 // --- ステージエディター関連 ---
@@ -46,7 +47,7 @@ let draggingNode = null;
 // 定数
 const MENU_BUTTON_Y = 8;
 const MENU_BUTTON_SIZE = 40;
-const REACTION_DISTANCE = 80; // 反応する最大距離
+const REACTION_DISTANCE = 80; 
 const OBSTACLE_SIZE = 40;
 const PATH_NODE_SIZE = 20;
 
@@ -54,94 +55,30 @@ const PATH_NODE_SIZE = 20;
 // 2. 合成レシピの定義
 // ===================================
 const recipes = [
-    {
-        name: 'H2O',
-        ingredients: { 'H': 2, 'O': 1 },
-        core: 'O',
-        color: '#ADD8E6', // 水色
-        range: 200,
-        rate: 500,
-        baseHp: 150
-    },
-    {
-        name: 'CO2',
-        ingredients: { 'C': 1, 'O': 2 },
-        core: 'C',
-        color: '#A9A9A9', // ダークグレー
-        range: 180,
-        rate: 800,
-        baseHp: 180
-    },
-    {
-        name: 'HCl',
-        ingredients: { 'H': 1, 'Cl': 1 },
-        core: 'Cl',
-        color: '#FFFFE0', // ライトイエロー
-        range: 160,
-        rate: 400,
-        baseHp: 120 
-    },
-    {
-        name: 'CuO',
-        ingredients: { 'Cu': 1, 'O': 1 },
-        core: 'Cu',
-        color: '#333333', // 黒っぽい
-        range: 150,
-        rate: 1000,
-        baseHp: 250
-    },
-    {
-        name: 'FeS',
-        ingredients: { 'Fe': 1, 'S': 1 },
-        core: 'Fe',
-        color: '#8B4513', // 茶色
-        range: 150,
-        rate: 1200,
-        baseHp: 300 
-    },
-    {
-        name: 'NaCl',
-        ingredients: { 'Na': 1, 'Cl': 1 },
-        core: 'Na',
-        color: '#F0F8FF', // アリスブルー
-        range: 170,
-        rate: 600,
-        baseHp: 140
-    },
-    {
-        name: 'H2S',
-        ingredients: { 'H': 2, 'S': 1 },
-        core: 'S',
-        color: '#FFFF00', // 黄色
-        range: 190,
-        rate: 700,
-        baseHp: 130
-    }
+    { name: 'H2O', ingredients: { 'H': 2, 'O': 1 }, core: 'O', color: '#ADD8E6', range: 200, rate: 500, baseHp: 150 },
+    { name: 'CO2', ingredients: { 'C': 1, 'O': 2 }, core: 'C', color: '#A9A9A9', range: 180, rate: 800, baseHp: 180 },
+    { name: 'HCl', ingredients: { 'H': 1, 'Cl': 1 }, core: 'Cl', color: '#FFFFE0', range: 160, rate: 400, baseHp: 120 },
+    { name: 'CuO', ingredients: { 'Cu': 1, 'O': 1 }, core: 'Cu', color: '#333333', range: 150, rate: 1000, baseHp: 250 },
+    { name: 'FeS', ingredients: { 'Fe': 1, 'S': 1 }, core: 'Fe', color: '#8B4513', range: 150, rate: 1200, baseHp: 300 },
+    { name: 'NaCl', ingredients: { 'Na': 1, 'Cl': 1 }, core: 'Na', color: '#F0F8FF', range: 170, rate: 600, baseHp: 140 },
+    { name: 'H2S', ingredients: { 'H': 2, 'S': 1 }, core: 'S', color: '#FFFF00', range: 190, rate: 700, baseHp: 130 }
 ];
-
 
 // ===================================
 // 3. setup / 周期表データ
 // ===================================
 const elementData = [
-    // Period 1
     { symbol: 'H', row: 1, col: 1 },  { symbol: 'He', row: 1, col: 18 },
-    // Period 2
     { symbol: 'Li', row: 2, col: 1 }, { symbol: 'Be', row: 2, col: 2 },
     { symbol: 'B', row: 2, col: 13 }, { symbol: 'C', row: 2, col: 14 }, { symbol: 'N', row: 2, col: 15 }, { symbol: 'O', row: 2, col: 16 }, { symbol: 'F', row: 2, col: 17 }, { symbol: 'Ne', row: 2, col: 18 },
-    // Period 3
     { symbol: 'Na', row: 3, col: 1 }, { symbol: 'Mg', row: 3, col: 2 },
     { symbol: 'Al', row: 3, col: 13 }, { symbol: 'Si', row: 3, col: 14 }, { symbol: 'P', row: 3, col: 15 }, { symbol: 'S', row: 3, col: 16 }, { symbol: 'Cl', row: 3, col: 17 }, { symbol: 'Ar', row: 3, col: 18 },
-    // Period 4
     { symbol: 'K', row: 4, col: 1 }, { symbol: 'Ca', row: 4, col: 2 }, { symbol: 'Sc', row: 4, col: 3 }, { symbol: 'Ti', row: 4, col: 4 }, { symbol: 'V', row: 4, col: 5 }, { symbol: 'Cr', row: 4, col: 6 }, { symbol: 'Mn', row: 4, col: 7 }, { symbol: 'Fe', row: 4, col: 8 }, { symbol: 'Co', row: 4, col: 9 }, { symbol: 'Ni', row: 4, col: 10 }, { symbol: 'Cu', row: 4, col: 11 }, { symbol: 'Zn', row: 4, col: 12 },
     { symbol: 'Ga', row: 4, col: 13 }, { symbol: 'Ge', row: 4, col: 14 }, { symbol: 'As', row: 4, col: 15 }, { symbol: 'Se', row: 4, col: 16 }, { symbol: 'Br', row: 4, col: 17 }, { symbol: 'Kr', row: 4, col: 18 },
-    // Period 5
     { symbol: 'Rb', row: 5, col: 1 }, { symbol: 'Sr', row: 5, col: 2 }, { symbol: 'Y', row: 5, col: 3 }, { symbol: 'Zr', row: 5, col: 4 }, { symbol: 'Nb', row: 5, col: 5 }, { symbol: 'Mo', row: 5, col: 6 }, { symbol: 'Tc', row: 5, col: 7 }, { symbol: 'Ru', row: 5, col: 8 }, { symbol: 'Rh', row: 5, col: 9 }, { symbol: 'Pd', row: 5, col: 10 }, { symbol: 'Ag', row: 5, col: 11 }, { symbol: 'Cd', row: 5, col: 12 },
     { symbol: 'In', row: 5, col: 13 }, { symbol: 'Sn', row: 5, col: 14 }, { symbol: 'Sb', row: 5, col: 15 }, { symbol: 'Te', row: 5, col: 16 }, { symbol: 'I', row: 5, col: 17 }, { symbol: 'Xe', row: 5, col: 18 },
-    // Period 6
     { symbol: 'Cs', row: 6, col: 1 }, { symbol: 'Ba', row: 6, col: 2 }, { symbol: 'La', row: 6, col: 3 }, { symbol: 'Hf', row: 6, col: 4 }, { symbol: 'Ta', row: 6, col: 5 }, { symbol: 'W', row: 6, col: 6 }, { symbol: 'Re', row: 6, col: 7 }, { symbol: 'Os', row: 6, col: 8 }, { symbol: 'Ir', row: 6, col: 9 }, { symbol: 'Pt', row: 6, col: 10 }, { symbol: 'Au', row: 6, col: 11 }, { symbol: 'Hg', row: 6, col: 12 },
     { symbol: 'Tl', row: 6, col: 13 }, { symbol: 'Pb', row: 6, col: 14 }, { symbol: 'Bi', row: 6, col: 15 }, { symbol: 'Po', row: 6, col: 16 }, { symbol: 'At', row: 6, col: 17 }, { symbol: 'Rn', row: 6, col: 18 },
-    // Period 7
     { symbol: 'Fr', row: 7, col: 1 }, { symbol: 'Ra', row: 7, col: 2 }, { symbol: 'Ac', row: 7, col: 3 }, { symbol: 'Rf', row: 7, col: 4 }, { symbol: 'Db', row: 7, col: 5 }, { symbol: 'Sg', row: 7, col: 6 }, { symbol: 'Bh', row: 7, col: 7 }, { symbol: 'Hs', row: 7, col: 8 }, { symbol: 'Mt', row: 7, col: 9 }, { symbol: 'Ds', row: 7, col: 10 }, { symbol: 'Rg', row: 7, col: 11 }, { symbol: 'Cn', row: 7, col: 12 },
     { symbol: 'Nh', row: 7, col: 13 }, { symbol: 'Fl', row: 7, col: 14 }, { symbol: 'Mc', row: 7, col: 15 }, { symbol: 'Lv', row: 7, col: 16 }, { symbol: 'Ts', row: 7, col: 17 }, { symbol: 'Og', row: 7, col: 18 }
 ];
@@ -151,7 +88,9 @@ const activeElements = Array.from(recipeElements).filter(symbol => elementData.s
 activeElements.push('H', 'O', 'C', 'N', 'Cl', 'Cu', 'Fe', 'S', 'Na');
 
 function setup() {
-    createCanvas(windowWidth, windowHeight);
+    let cnv = createCanvas(windowWidth, windowHeight);
+    cnv.style('display', 'block'); 
+    
     gameAreaWidth = width / 2;
 
     document.addEventListener('contextmenu', (e) => {
@@ -167,14 +106,15 @@ function setup() {
 
 function setupPeriodicTable() {
     periodicTableElements = [];
-    let gridCellSize = 35;
-    let gridMargin = 4;
-    let availableWidth = (width - gameAreaWidth) - 60;
-    gridCellSize = (availableWidth / 18) - gridMargin;
-    gridCellSize = max(gridCellSize, 15);
+    let gridMargin = 2; 
+    let availableWidth = (width - gameAreaWidth) - 20; 
+    let gridCellSize = (availableWidth / 18) - gridMargin;
+    gridCellSize = max(gridCellSize, 20); 
+    
     let totalCellSize = gridCellSize + gridMargin;
-    let gridStartX = gameAreaWidth + 30;
-    let gridStartY = 50;
+    let gridStartX = gameAreaWidth + 10; 
+    let gridStartY = 60; 
+    
     for (const elData of elementData) {
         let x = gridStartX + (elData.col - 1) * totalCellSize;
         let y = gridStartY + (elData.row - 1) * totalCellSize;
@@ -202,21 +142,17 @@ function draw() {
         for (let el of periodicTableElements) { el.draw(); }
         drawCostTooltip();
 
-        // --- ゲームエリア内の描画 ---
         drawPlacementAreas(); 
-        
         for (let bar of gameObstacles) { bar.draw(); }
-
         drawPathNodes(); 
 
         if (mainTower) { mainTower.draw(); }
         for (let el of placedGameElements) { el.draw(); }
-        drawCombinationHints();
+        // drawCombinationHints(); // ★削除: マウス付近のヒントは廃止
         for (let b of bullets) { b.draw(); }
-        drawShockwaves(); // 敵の攻撃描画
+        drawShockwaves(); 
         for (let e of enemies) { e.draw(); }
         
-
         if (draggingElement) {
             fill(draggingElement.color);
             stroke(0);
@@ -226,7 +162,6 @@ function draw() {
             let c = color(draggingElement.color);
             let brightness = red(c) * 0.299 + green(c) * 0.587 + blue(c) * 0.114;
             fill(brightness > 128 ? 0 : 255);
-            
             noStroke();
             textAlign(CENTER, CENTER);
             textSize(draggingElement.size * 0.6);
@@ -237,17 +172,12 @@ function draw() {
             updateGameLogic();
         }
 
+        // UI描画
+        drawUnitInfoPanel(); // 左パネル
+        drawRecipeHintPanel(); // 右パネル(旧ログ)
         drawEnergyBar();
         drawDefeatedCount();
         
-        // ★統合: ユニット情報パネルの描画
-        drawUnitInfoPanel();
-
-        // ★統合: ans.js由来の逆引きヒント機能呼び出し
-        if (!menuOpen) {
-             drawReverseRecipeGuide(); 
-        }
-
         drawMenuOverlay();
 
         if (gameState === 'gameover') {
@@ -326,11 +256,12 @@ function mousePressed() {
         }
 
         if (!menuOpen) {
-            // ★統合: ゲームエリア内の既存ユニットクリック判定（ステータス表示更新）
             if (mouseX < gameAreaWidth) {
                 for(let el of placedGameElements) {
                     if (dist(mouseX, mouseY, el.x, el.y) < el.size / 2) {
                         updateInfoPanelFromUnit(el);
+                        // ★追加: ヒントパネル用ターゲットも更新
+                        if(!el.reacted) lastHintTarget = el;
                     }
                 }
             }
@@ -342,7 +273,6 @@ function mousePressed() {
                         color: el.color,
                         size: el.size + 10
                     };
-                    // ★統合: 周期表からドラッグ開始した時点で、その元素の基本情報をパネルにセット
                     updateInfoPanelFromElement(el.name);
                     return;
                 }
@@ -449,7 +379,7 @@ function updateGameLogic() {
         currentEnergy = min(currentEnergy, maxEnergy);
     }
 
-    // --- 敵の生成ロジック (1.js由来: 強化版) ---
+    // --- 敵の生成ロジック ---
     let currentInterval;
     if (enemiesSpawned < 5) {
         currentInterval = 4000;
@@ -464,7 +394,6 @@ function updateGameLogic() {
     if (millis() - lastSpawnTime > currentInterval) {
         if (enemiesSpawned < TOTAL_ENEMIES_TO_SPAWN) {
             
-            // 出現パターン: Normal, Tank(硬い), Erratic(変則)
             let enemyType = 'normal';
             if (enemiesSpawned > 0 && enemiesSpawned % 10 === 0) {
                 enemyType = 'tank'; 
@@ -519,7 +448,6 @@ function updateGameLogic() {
 
         if (e.isDead() || e.x < 0 || e.y < 0 || e.x > width || e.y > height) {
             if (e.isDead()) {
-                // --- 報酬計算 (1.js由来) ---
                 let reward = 0;
                 if (e.type === 'tank') {
                     reward = enemyKillReward * 5; 
@@ -553,7 +481,7 @@ function updateGameLogic() {
         }
     }
 
-    findCombinationHints();
+    // findCombinationHints(); // ★削除: マウス付近のヒント計算は不要
     checkAndPerformReactions();
 
     if (mainTower && !mainTower.isAlive()) {
@@ -572,7 +500,8 @@ function initializeStage() {
     shockwaves = [];
     combinationHints = [];
     lastSpawnTime = millis();
-    lastSelectedUnit = null; // ★統合: リセット
+    lastSelectedUnit = null; 
+    lastHintTarget = null; // ★リセット
 
     gameObstacles = [];
     for(let obs of obstacles) {
@@ -641,8 +570,9 @@ function performElementPlacement(elementName, x, y, size) {
             );
             placedGameElements.push(newEl);
             
-            // ★統合: 配置したタイミングでもパネル情報を更新しておく
             updateInfoPanelFromUnit(newEl);
+            // ★追加: 配置した元素をヒント対象にする
+            if(!newEl.reacted) lastHintTarget = newEl;
 
             console.log(elementName + "を配置しました。残エネルギー: " + currentEnergy);
             return true;
@@ -757,11 +687,12 @@ function drawEditorButtons() {
     text('タイトルに戻る', backX + BACK_BUTTON_W / 2, backY + BUTTON_H / 2);
 }
 
+// Energyバー
 function drawEnergyBar() {
-    let barWidth = (width - gameAreaWidth) - 60;
+    let barWidth = (width - gameAreaWidth) - 60; 
     let barHeight = 25;
-    let barX = gameAreaWidth + 30;
-    let barY = height - 40 - barHeight;
+    let barX = gameAreaWidth + 30; 
+    let barY = height - 20 - barHeight; 
 
     fill(50);
     noStroke();
@@ -784,11 +715,12 @@ function drawEnergyBar() {
     text("ENERGY", barX, barY - 5);
 }
 
+// Defeatedバー
 function drawDefeatedCount() {
     let barWidth = (width - gameAreaWidth) - 60;
     let barHeight = 25;
     let barX = gameAreaWidth + 30;
-    let barY = height - 40 - barHeight * 2 - 15; 
+    let barY = height - 45 - 25 - 40; 
 
     fill(50);
     noStroke();
@@ -812,78 +744,218 @@ function drawDefeatedCount() {
     text("DEFEATED", barX, barY - 5);
 }
 
-// ★統合: ユニット詳細パネルの描画関数
+// UNIT INFO: 左半分
 function drawUnitInfoPanel() {
-    // 表示領域の計算（DefeatedCountバーの上、左半分）
-    let availableW = (width - gameAreaWidth) - 60;
-    let panelW = availableW / 2 - 5; // 左半分
-    let panelH = 235; // 高さは固定
-    // DefeatedCountのY座標が height - 40 - 25*2 - 15 = height - 105 くらい
-    // そこから panelH 分上に配置
-    let panelX = gameAreaWidth + 30;
-    let panelY = height - 105 - panelH - 25; 
+    let sideBarW = width - gameAreaWidth;
+    let tableAvailableW = sideBarW - 20;
+    let gridCellSize = (tableAvailableW / 18) - 2;
+    gridCellSize = max(gridCellSize, 20);
+    let totalCellSize = gridCellSize + 2;
+    let tableBottomY = 60 + (7 * totalCellSize);
 
-    // 背景
-    fill(0, 0, 0, 100);
+    let footerTopY = height - 160; 
+
+    let spaceX = gameAreaWidth + 10;
+    let spaceY = tableBottomY + 10; 
+    let spaceW = sideBarW - 20;
+    let spaceH = footerTopY - spaceY - 10; 
+
+    if (spaceH < 50) return;
+
+    let panelX = spaceX;
+    let panelY = spaceY;
+    let gap = 10;
+    let panelW = (spaceW - gap) / 2; 
+    let panelH = spaceH;
+
+    fill(0, 0, 0, 150);
     stroke(255);
-    strokeWeight(1);
+    strokeWeight(2);
     rectMode(CORNER);
-    rect(panelX, panelY, panelW, panelH, 5);
+    rect(panelX, panelY, panelW, panelH, 10);
 
-    // タイトル
+    let textSizeRatio = min(panelW, panelH) * 0.15;
+    textSizeRatio = constrain(textSizeRatio, 18, 36);
+    
     noStroke();
     fill(255);
-    textSize(25);
+    textSize(textSizeRatio); 
+    textStyle(BOLD);
     textAlign(LEFT, TOP);
-    text("UNIT INFO", panelX + 5, panelY + 5);
+    text("UNIT INFO", panelX + 10, panelY + 10);
 
     if (lastSelectedUnit) {
-        // 拡大画像（円）の表示
-        let circleSize = 180;
-        let circleX = panelX + 100;
-        let circleY = panelY + 130;
+        let circleSize = min(panelW * 0.4, panelH * 0.6);
+        let circleX = panelX + panelW * 0.25;
+        let circleY = panelY + panelH * 0.55;
 
         stroke(0);
         strokeWeight(2);
         fill(lastSelectedUnit.color);
         ellipse(circleX, circleY, circleSize, circleSize);
 
-        // 元素記号
         fill(lastSelectedUnit.textColor || 0);
         noStroke();
         textAlign(CENTER, CENTER);
-        textSize(72);
+        textSize(circleSize * 0.6); 
+        textStyle(NORMAL);
         text(lastSelectedUnit.name, circleX, circleY);
 
-        // ステータス情報の表示（右側）
-        let textX = circleX + 100;
-        let textY = panelY + 40;
-        let lineHeight = 32;
+        let textX = panelX + panelW * 0.48;
+        let startTextY = panelY + panelH * 0.2;
+        
+        let infoTextSize = min(panelW * 0.08, panelH * 0.08); 
+        infoTextSize = constrain(infoTextSize, 12, 22); 
+        let lineHeight = infoTextSize * 1.5;
 
         fill(255);
         textAlign(LEFT, TOP);
-        textSize(25);
+        textSize(infoTextSize); 
 
-        text(`Name: ${lastSelectedUnit.name}`, textX, textY);
-        text(`HP: ${lastSelectedUnit.hpStr}`, textX, textY + lineHeight);
-        text(`Atk: ${lastSelectedUnit.attack}`, textX, textY + lineHeight * 2);
-        text(`Rng: ${lastSelectedUnit.range}`, textX, textY + lineHeight * 3);
-        text(`Rate: ${lastSelectedUnit.rate}`, textX, textY + lineHeight * 4);
+        text(`Name: ${lastSelectedUnit.name}`, textX, startTextY);
+        text(`HP: ${lastSelectedUnit.hpStr}`, textX, startTextY + lineHeight);
+        text(`Atk: ${lastSelectedUnit.attack}`, textX, startTextY + lineHeight * 2);
+        text(`Rng: ${lastSelectedUnit.range}`, textX, startTextY + lineHeight * 3);
+        text(`Rate: ${lastSelectedUnit.rate}`, textX, startTextY + lineHeight * 4);
     } else {
         fill(200);
         textAlign(CENTER, CENTER);
-        textSize(25);
-        text("No Selection", panelX + panelW / 2, panelY + panelH / 2);
+        textSize(textSizeRatio);
+        text("No Select", panelX + panelW / 2, panelY + panelH / 2);
     }
 }
 
-// ★統合: パネル情報更新ヘルパー（周期表からのドラッグ用）
+// ★修正: レシピヒントパネル（右半分）- ログの代わりに表示
+function drawRecipeHintPanel() {
+    let sideBarW = width - gameAreaWidth;
+    let tableAvailableW = sideBarW - 20;
+    let gridCellSize = (tableAvailableW / 18) - 2;
+    gridCellSize = max(gridCellSize, 20);
+    let totalCellSize = gridCellSize + 2;
+    let tableBottomY = 60 + (7 * totalCellSize);
+    let footerTopY = height - 160; 
+
+    let spaceX = gameAreaWidth + 10;
+    let spaceY = tableBottomY + 10; 
+    let spaceW = sideBarW - 20;
+    let spaceH = footerTopY - spaceY - 10; 
+
+    if (spaceH < 50) return;
+
+    let gap = 10;
+    let halfW = (spaceW - gap) / 2; 
+    let panelX = spaceX + halfW + gap;
+    let panelY = spaceY;
+    let panelW = halfW;
+    let panelH = spaceH;
+
+    // 背景
+    fill(0, 0, 0, 150);
+    stroke(255);
+    strokeWeight(2);
+    rectMode(CORNER);
+    rect(panelX, panelY, panelW, panelH, 10);
+
+    // タイトル
+    let textSizeRatio = min(panelW, panelH) * 0.15;
+    textSizeRatio = constrain(textSizeRatio, 18, 36);
+
+    noStroke();
+    fill(255);
+    textSize(textSizeRatio);
+    textStyle(BOLD);
+    textAlign(LEFT, TOP);
+    text("RECIPE HINT", panelX + 10, panelY + 10);
+
+    // ★修正: lastHintTarget を使用して、マウスが離れてもヒントを表示し続ける
+    if (!lastHintTarget) {
+        fill(200);
+        textAlign(CENTER, CENTER);
+        // テキストサイズ調整
+        textSize(textSizeRatio * 0.6);
+        text("Select Unit", panelX + panelW / 2, panelY + panelH / 2);
+        return;
+    }
+
+    // 表示設定
+    let contentTextSize = min(panelW * 0.08, panelH * 0.08);
+    contentTextSize = constrain(contentTextSize, 12, 22);
+    textSize(contentTextSize);
+    textStyle(NORMAL);
+    let lineHeight = contentTextSize * 1.5;
+    let startY = panelY + panelH * 0.2; // タイトルの下から
+
+    // レシピ検索と表示
+    textAlign(LEFT, TOP);
+    let guideList = [];
+
+    // lastHintTarget についてのレシピを検索
+    for (let recipe of recipes) {
+        if (!recipe.ingredients[lastHintTarget.name]) continue;
+
+        let needed = { ...recipe.ingredients };
+        needed[lastHintTarget.name]--;
+
+        // 現在の周囲の状況に基づいて不足分を計算
+        // (注意: lastHintTargetが破壊されている可能性もあるが、座標情報が残っていれば計算可能)
+        let neighbors = placedGameElements.filter(el => 
+            el !== lastHintTarget && 
+            !el.reacted && 
+            !el.isDead() &&
+            dist(lastHintTarget.x, lastHintTarget.y, el.x, el.y) < REACTION_DISTANCE
+        );
+        
+        for (let n of neighbors) {
+            if (needed[n.name] > 0) {
+                needed[n.name]--;
+            }
+        }
+
+        let missingParts = [];
+        for (let key in needed) {
+            if (needed[key] > 0) {
+                missingParts.push(`${key}x${needed[key]}`);
+            }
+        }
+
+        if (missingParts.length > 0) {
+            guideList.push({
+                name: recipe.name,
+                missing: missingParts.join(', '), 
+                color: recipe.color
+            });
+        }
+    }
+
+    // 表示ループ
+    if (guideList.length === 0) {
+        fill(200);
+        text("No recipes available.", panelX + 10, startY);
+    } else {
+        let currentY = startY;
+        for (let guide of guideList) {
+            // レシピ名 (色付き)
+            fill(guide.color);
+            textStyle(BOLD);
+            text(`★ ${guide.name}`, panelX + 10, currentY);
+            
+            // 足りない素材
+            fill(255);
+            textStyle(NORMAL);
+            text(`   Need: ${guide.missing}`, panelX + 10, currentY + lineHeight);
+            
+            currentY += lineHeight * 2.2; // 次のレシピへ
+            
+            if (currentY > panelY + panelH - 10) break;
+        }
+    }
+}
+
+// パネル情報更新ヘルパー
 function updateInfoPanelFromElement(elementName) {
-    // まだ配置されていないので、基本情報から推測して表示
     let colorVal = '#CCCCCC';
     let textColor = 0;
     
-    // 色の再計算（PeriodicElementと同様のロジック）
     let myData = elementData.find(e => e.symbol === elementName);
     if (myData) {
         colorMode(HSB, 360, 100, 100);
@@ -901,14 +973,14 @@ function updateInfoPanelFromElement(elementName) {
         name: elementName,
         color: colorVal,
         textColor: textColor,
-        hpStr: "100/100", // 初期値
-        attack: cost, // 元素はコストが攻撃力
+        hpStr: "100/100", 
+        attack: cost, 
         range: 150,
         rate: 1000
     };
 }
 
-// ★統合: パネル情報更新ヘルパー（配置済みユニット用）
+// パネル情報更新ヘルパー
 function updateInfoPanelFromUnit(unitObj) {
     let c = color(unitObj.color);
     let brightnessVal = red(c) * 0.299 + green(c) * 0.587 + blue(c) * 0.114;
@@ -1168,7 +1240,6 @@ function checkAndPerformReactions() {
                 
                 placedGameElements = placedGameElements.filter(el => !consumedElements.includes(el));
 
-                // ★統合: 生成された化合物オブジェクトを作成
                 let newMolecule = new PlacedElement(
                     recipe.name, 
                     avgX, 
@@ -1179,8 +1250,8 @@ function checkAndPerformReactions() {
                 );
                 placedGameElements.push(newMolecule);
 
-                // ★統合: 合成された化合物をパネルに表示
                 updateInfoPanelFromUnit(newMolecule);
+                // ★追加: 合成時もヒント対象を更新（もし必要なら）
                 
                 return; 
             }
@@ -1188,82 +1259,10 @@ function checkAndPerformReactions() {
     }
 }
 
-function findCombinationHints() {
-    combinationHints = [];
-
-    if (!draggingElement) return;
-
-    for (let recipe of recipes) {
-        
-        if (!recipe.ingredients[draggingElement.name]) continue;
-
-        let requiredCounts = { ...recipe.ingredients };
-        requiredCounts[draggingElement.name]--;
-
-        let neighbors = placedGameElements.filter(el => 
-            !el.reacted && 
-            !el.isDead() &&
-            dist(mouseX, mouseY, el.x, el.y) < REACTION_DISTANCE
-        );
-
-        for (let neighbor of neighbors) {
-            if (requiredCounts[neighbor.name] > 0) {
-                requiredCounts[neighbor.name]--;
-            }
-        }
-
-        let isComplete = true;
-        for (let ingName in requiredCounts) {
-            if (requiredCounts[ingName] > 0) {
-                isComplete = false;
-                break;
-            }
-        }
-
-        if (isComplete) {
-            combinationHints.push({
-                x: mouseX,
-                y: mouseY - 40,
-                name: recipe.name,
-                color: recipe.color
-            });
-            
-            return;
-        }
-    }
-}
-
-
-function drawCombinationHints() {
-    for (let hint of combinationHints) {
-        let floatOffset = sin(millis() * 0.01) * 3;
-        
-        push();
-        translate(hint.x, hint.y + floatOffset);
-        
-        noStroke();
-        fill(255, 255, 255, 220); 
-        rectMode(CENTER);
-        let w = textWidth(hint.name) + 40; 
-        rect(0, 0, max(60, w), 30, 10);
-        
-        fill(255, 255, 255, 220);
-        triangle(-6, 15, 6, 15, 0, 22);
-
-        fill(0); 
-        textAlign(CENTER, CENTER);
-        textSize(16);
-        textStyle(BOLD);
-        text(hint.name + "!", 0, 0);
-        
-        pop();
-    }
-}
-
-
+// ※ findCombinationHints / drawCombinationHints は削除しました
 
 // ===================================
-// 9. クラス定義
+// 9. クラス定義 (PeriodicElementなど)
 // ===================================
 
 class PeriodicElement {
@@ -1538,9 +1537,7 @@ class Barricade {
     }
 }
 
-// --- Enemyクラス (1.js由来: タイプ別ロジック搭載) ---
 class Enemy {
-    // type: 'normal' | 'tank' | 'erratic'
     constructor(x, y, path, type = 'normal') {
         this.x = x;
         this.y = y;
@@ -1554,9 +1551,7 @@ class Enemy {
         this.lastAttackTime = 0;
         this.damageToWall = 0.5;
 
-        // タイプ別のステータス設定
         if (this.type === 'tank') {
-            // タンク: 色は青紫系
             this.size = 50;
             this.health = 2000; 
             this.speed = 40; 
@@ -1565,7 +1560,6 @@ class Enemy {
             this.attackDamage = 30;
             this.attackRate = 2000;
         } else if (this.type === 'erratic') {
-            // エラティック: 色は黄色系
             this.size = 25;
             this.health = 250; 
             this.speed = 120; 
@@ -1575,7 +1569,6 @@ class Enemy {
             this.attackRate = 1000;
             this.wobbleOffset = random(1000); 
         } else {
-            // ノーマル
             this.size = 30;
             this.health = 500; 
             this.speed = 80;
@@ -1594,7 +1587,6 @@ class Enemy {
         strokeWeight(1);
         
         if (this.type === 'erratic') {
-            // エラティックは三角形っぽく
             push();
             translate(this.x, this.y);
             rotate(millis() * 0.01); 
@@ -1605,11 +1597,9 @@ class Enemy {
             );
             pop();
         } else {
-            // 他は円形
             ellipse(this.x, this.y, this.size, this.size);
         }
 
-        // HPバー
         let hpBarWidth = this.size * 0.8;
         let hpBarHeight = 5;
         let maxHp = (this.type === 'tank') ? 2000 : (this.type === 'erratic' ? 250 : 500);
@@ -1976,91 +1966,6 @@ function handleEditorMousePressed() {
                     }
                 }
             }
-        }
-    }
-}
-
-// ===================================
-// ★追加: 逆引きガイド（ans.js由来）
-// ===================================
-function drawReverseRecipeGuide() {
-    let target = null;
-    for (let el of placedGameElements) {
-        if (!el.reacted && dist(mouseX, mouseY, el.x, el.y) < el.size / 2) {
-            target = el;
-            break;
-        }
-    }
-
-    if (!target) return;
-
-    let guideList = [];
-
-    for (let recipe of recipes) {
-        if (!recipe.ingredients[target.name]) continue;
-
-        let needed = { ...recipe.ingredients };
-        needed[target.name]--;
-
-        let neighbors = placedGameElements.filter(el => 
-            el !== target && 
-            !el.reacted && 
-            dist(target.x, target.y, el.x, el.y) < REACTION_DISTANCE
-        );
-        
-        for (let n of neighbors) {
-            if (needed[n.name] > 0) {
-                needed[n.name]--;
-            }
-        }
-
-        let missingParts = [];
-        for (let key in needed) {
-            if (needed[key] > 0) {
-                missingParts.push(`${key}×${needed[key]}`);
-            }
-        }
-
-        if (missingParts.length > 0) {
-            guideList.push({
-                name: recipe.name,
-                missing: missingParts.join(', '), 
-                color: recipe.color
-            });
-        }
-    }
-
-    if (guideList.length > 0) {
-        let boxW = 220;
-        let boxH = 30 + (guideList.length * 25);
-        let x = mouseX + 20;
-        let y = mouseY - boxH / 2;
-
-        if (x + boxW > width) x = mouseX - boxW - 20;
-        if (y < 0) y = 10;
-
-        fill(0, 0, 0, 220);
-        stroke(255);
-        strokeWeight(1);
-        rect(x, y, boxW, boxH, 8);
-
-        fill(255);
-        noStroke();
-        textAlign(LEFT, TOP);
-        textSize(14);
-        text("【 合成へのヒント 】", x + 10, y + 8);
-        
-        let lineY = y + 35;
-        for (let guide of guideList) {
-            fill(guide.color);
-            textStyle(BOLD);
-            text(guide.name, x + 15, lineY);
-            
-            fill(200);
-            textStyle(NORMAL);
-            text("あと: " + guide.missing, x + 70, lineY);
-            
-            lineY += 25;
         }
     }
 }
